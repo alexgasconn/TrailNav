@@ -1,0 +1,7 @@
+{
+  "name": "TrailNav",
+  "description": "Offline navigation for hiking, trail running, MTB routes using GPX.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
