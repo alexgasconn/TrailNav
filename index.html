@@ -1,16 +1,60 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#09090b" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
-    <title>TrailNav</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
 
+<head>
+  <meta charset="UTF-8" />
+  <!-- Viewport optimization for mobile/Android -->
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, user-scalable=yes" />
+  <meta name="apple-mobile-web-app-capable" content="true" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TrailNav" />
+
+  <!-- Android specific -->
+  <meta name="theme-color" content="#10b981" />
+  <meta name="mobile-web-app-capable" content="true" />
+  <meta name="application-name" content="TrailNav" />
+  <meta name="msapplication-TileColor" content="#10b981" />
+
+  <!-- Descriptive metadata -->
+  <meta name="description" content="Offline GPS navigation for hiking and trail running with GPX support" />
+  <meta name="keywords" content="hiking, hiking app, GPS, offline maps, trail, navigation, GPX" />
+  <meta name="author" content="TrailNav" />
+
+  <!-- Icons for all platforms -->
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+
+  <title>TrailNav - Offline Trail Navigation</title>
+
+  <!-- Performance optimizations -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="format-detection" content="telephone=no" />
+  <style>
+    html {
+      font-size: clamp(14px, 2vw, 16px);
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #root {
+      height: 100%;
+    }
+  </style>
+</head>
+
+<body>
+  <noscript>TrailNav requires JavaScript enabled to run. Please enable JavaScript in your browser settings.</noscript>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

@@ -1,0 +1,89 @@
+{
+    "name": "TrailNav - Offline Trail Navigation",
+    "short_name": "TrailNav",
+    "description": "Offline GPS navigation for hiking, trail running, and MTB routes using GPX files. Navigate with confidence anywhere with offline maps.",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "portrait-primary",
+    "theme_color": "#10b981",
+    "background_color": "#09090b",
+    "prefer_related_applications": false,
+    "categories": [
+        "navigation",
+        "sports"
+    ],
+    "screenshots": [
+        {
+            "src": "/icon.svg",
+            "type": "image/svg+xml",
+            "sizes": "192x192",
+            "form_factor": "narrow"
+        },
+        {
+            "src": "/icon.svg",
+            "type": "image/svg+xml",
+            "sizes": "512x512",
+            "form_factor": "wide"
+        }
+    ],
+    "icons": [
+        {
+            "src": "/icon.svg",
+            "type": "image/svg+xml",
+            "sizes": "any",
+            "purpose": "any"
+        },
+        {
+            "src": "/icon.svg",
+            "type": "image/svg+xml",
+            "sizes": "any",
+            "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Import Route",
+            "short_name": "Import",
+            "description": "Quick access to import a new GPX route",
+            "url": "/?action=import",
+            "icons": [
+                {
+                    "src": "/icon.svg",
+                    "type": "image/svg+xml",
+                    "sizes": "any"
+                }
+            ]
+        },
+        {
+            "name": "Map Explorer",
+            "short_name": "Maps",
+            "description": "Explore available maps and routes",
+            "url": "/?action=map",
+            "icons": [
+                {
+                    "src": "/icon.svg",
+                    "type": "image/svg+xml",
+                    "sizes": "any"
+                }
+            ]
+        }
+    ],
+    "share_target": {
+        "action": "/share",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "files": [
+                {
+                    "name": "route",
+                    "accept": [
+                        ".gpx",
+                        "text/xml",
+                        "application/gpx+xml"
+                    ]
+                }
+            ]
+        }
+    }
+}

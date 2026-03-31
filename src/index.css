@@ -4,17 +4,121 @@
   --color-zinc-950: #09090b;
 }
 
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    font-size: clamp(14px, 2vw, 16px);
+    overscroll-behavior-y: contain;
+    overscroll-behavior-x: none;
+  }
+
+  body {
+    background-color: var(--color-zinc-950);
+    color: #f4f4f5;
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    position: fixed;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  }
+
+  #root {
+    height: 100%;
+    width: 100%;
+  }
+
+  /* Remove default button styles */
+  button {
+    border: none;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    outline: none;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  input[type="file"],
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  /* iOS input styling */
+  input[type="file"] {
+    -webkit-appearance: button;
+  }
+}
+
 @layer utilities {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
+
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
-}
 
-body {
-  background-color: var(--color-zinc-950);
-  color: #f4f4f5;
-  -webkit-tap-highlight-color: transparent;
+  .pl-safe {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .pr-safe {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .inset-safe {
+    top: env(safe-area-inset-top);
+    right: env(safe-area-inset-right);
+    left: env(safe-area-inset-left);
+    bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Touch optimization */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Smooth scrolling for mobile */
+  .scrollable {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+  }
+
+  /* Prevent zoom on input focus (iOS) */
+  input {
+    font-size: 16px;
+  }
+
+  /* Better button interaction */
+  button:active {
+    opacity: 0.7;
+  }
+
+  /* Hardware acceleration for smooth animations */
+  .accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
 }

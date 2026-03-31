@@ -1,24 +1,50 @@
 import React, { useEffect, useState } from 'react';
-import { Compass, Map as MapIcon, Upload, Navigation, ChevronRight, Activity } from 'lucide-react';
+import { Compass, Map as MapIcon, Upload, Navigation, ChevronRight, Activity, Wifi, WifiOff, Battery, Zap } from 'lucide-react';
 import { getRoutes, Route } from '../lib/db';
 import { Screen } from '../App';
 
 export function HomeScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) => void }) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [gpsStatus, setGpsStatus] = useState('Checking...');
+  const [batteryStatus, setBatteryStatus] = useState({ level: 0, charging: false });
+  const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
 
   useEffect(() => {
     getRoutes().then(setRoutes);
-    
+
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         () => setGpsStatus('Ready'),
         () => setGpsStatus('Unavailable'),
-        { timeout: 5000 }
+        { timeout: 5000, enableHighAccuracy: true }
       );
     } else {
       setGpsStatus('Not Supported');
     }
+
+    // Check battery status for Android devices
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((battery: any) => {
+        setBatteryStatus({ level: Math.round(battery.level * 100), charging: battery.charging });
+        battery.addEventListener('levelchange', () => {
+          setBatteryStatus({ level: Math.round(battery.level * 100), charging: battery.charging });
+        });
+        battery.addEventListener('chargingtimechange', () => {
+          setBatteryStatus({ level: Math.round(battery.level * 100), charging: battery.charging });
+        });
+      });
+    }
+
+    // Listen for online/offline status
+    const handleOnline = () => setOnlineStatus(true);
+    const handleOffline = () => setOnlineStatus(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   return (
@@ -41,16 +67,16 @@ export function HomeScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) 
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3">
-        <ActionButton 
-          icon={<Upload size={24} />} 
-          label="Import GPX" 
-          onClick={() => onNavigate('import')} 
-          primary 
+        <ActionButton
+          icon={<Upload size={24} />}
+          label="Import GPX"
+          onClick={() => onNavigate('import')}
+          primary
         />
-        <ActionButton 
-          icon={<MapIcon size={24} />} 
-          label="Explorer" 
-          onClick={() => onNavigate('map')} 
+        <ActionButton
+          icon={<MapIcon size={24} />}
+          label="Explorer"
+          onClick={() => onNavigate('map')}
         />
       </div>
 
@@ -60,11 +86,11 @@ export function HomeScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) 
           <Activity size={18} />
           Recent Routes
         </h2>
-        
+
         {routes.length === 0 ? (
           <div className="bg-zinc-900 rounded-2xl p-6 text-center border border-zinc-800">
             <p className="text-zinc-500 mb-4">No routes imported yet.</p>
-            <button 
+            <button
               onClick={() => onNavigate('import')}
               className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-sm font-medium transition-colors"
             >
@@ -99,13 +125,13 @@ export function HomeScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) 
 
 function StatusCard({ icon, label, value, color }: { icon: React.ReactNode, label: string, value: string, color: string }) {
   return (
-    <div className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800 flex items-center gap-3">
-      <div className={`p-2 bg-zinc-950 rounded-xl ${color}`}>
+    <div className={`${color} rounded-2xl p-3 flex items-center gap-3 border border-opacity-20 border-white shadow-md touch-target`}>
+      <div className="p-2.5 bg-black/20 rounded-lg">
         {icon}
       </div>
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">{label}</p>
-        <p className="text-sm font-semibold text-zinc-200">{value}</p>
+      <div className="flex-1">
+        <p className="text-[11px] uppercase tracking-wider font-semibold opacity-75">{label}</p>
+        <p className="text-sm font-bold">{value}</p>
       </div>
     </div>
   );
@@ -115,14 +141,13 @@ function ActionButton({ icon, label, onClick, primary }: { icon: React.ReactNode
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center p-6 rounded-2xl transition-all active:scale-95 ${
-        primary 
-          ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20' 
-          : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
-      }`}
+      className={`flex flex-col items-center justify-center p-6 rounded-3xl transition-all active:scale-95 touch-target font-semibold shadow-lg ${primary
+          ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white'
+          : 'bg-gradient-to-br from-zinc-800 to-zinc-900 hover:from-zinc-700 hover:to-zinc-800 text-zinc-100'
+        }`}
     >
       <div className="mb-2">{icon}</div>
-      <span className="font-medium text-sm">{label}</span>
+      <span className="text-sm">{label}</span>
     </button>
   );
 }
