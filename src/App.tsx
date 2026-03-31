@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { Home, Upload, Map, Settings as SettingsIcon, Compass, Download, Activity, ArrowLeft, X } from 'lucide-react';
 import { HomeScreen } from './screens/HomeScreen';
 import { RouteImportScreen } from './screens/RouteImportScreen';
@@ -163,6 +164,7 @@ export default function App() {
           </div>
         </nav>
       )}
+      <Analytics />
     </div>
   );
 }
