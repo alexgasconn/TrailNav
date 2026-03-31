@@ -31,38 +31,62 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
     useEffect(() => {
         if (map.current || !mapContainer.current) return;
 
-        map.current = new maplibregl.Map({
-            container: mapContainer.current,
-            style: {
-                version: 8,
-                sources: {
-                    osm: {
-                        type: 'raster',
-                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                        tileSize: 256,
-                    }
-                },
-                layers: [
-                    {
-                        id: 'osm',
-                        type: 'raster',
-                        source: 'osm',
-                        minzoom: 0,
-                        maxzoom: 19,
-                        paint: {
-                            'raster-brightness-max': 0.35,
-                            'raster-saturation': -0.7
-                        }
-                    }
-                ]
+        // Ensure container has dimensions before initializing map
+        const rect = mapContainer.current.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            console.warn('Map container has no dimensions, retrying...');
+            const timer = setTimeout(() => { }, 100);
+            return () => clearTimeout(timer);
+        }
+
+        const styleConfig = {
+            version: 8 as const,
+            glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+            sources: {
+                osm: {
+                    type: 'raster' as const,
+                    tiles: [
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                    ],
+                    tileSize: 256,
+                    attribution: '© OpenStreetMap contributors',
+                    crossOrigin: 'anonymous'
+                }
             },
-            center: [0, 0],
-            zoom: 16,
-            pitch: 45,
-            bearing: 0,
-            attributionControl: false,
-            interactive: false
-        });
+            layers: [
+                {
+                    id: 'osm',
+                    type: 'raster' as const,
+                    source: 'osm',
+                    minzoom: 0,
+                    maxzoom: 19,
+                    paint: {
+                        'raster-brightness-max': 0.35,
+                        'raster-saturation': -0.7,
+                        'raster-opacity': 1
+                    }
+                }
+            ]
+        };
+
+        try {
+            map.current = new maplibregl.Map({
+                container: mapContainer.current,
+                style: styleConfig as any,
+                center: [0, 0],
+                zoom: 16,
+                pitch: 45,
+                bearing: 0,
+                attributionControl: false,
+                interactive: false,
+                trackResize: true
+            });
+        } catch (error) {
+            console.error('Map initialization error:', error);
+        }
 
         map.current.on('load', () => {
             if (!map.current || !route.geoJson) return;
