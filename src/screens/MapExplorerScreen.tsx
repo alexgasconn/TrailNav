@@ -10,6 +10,7 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapStyle, setMapStyle] = useState<'satellite' | 'topo'>('topo');
+  const [showStylePicker, setShowStylePicker] = useState(false);
 
   // OSM style - proven to work reliably
   const osmStyle = {
@@ -25,8 +26,7 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
           'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
         ],
         tileSize: 256,
-        attribution: '© OpenStreetMap contributors',
-        crossOrigin: 'anonymous'
+        attribution: '© OpenStreetMap contributors'
       }
     },
     layers: [
@@ -54,8 +54,7 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
           'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         ],
         tileSize: 256,
-        attribution: '© Esri',
-        crossOrigin: 'anonymous'
+        attribution: '© Esri'
       }
     },
     layers: [
@@ -75,7 +74,6 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
   };
 
   useEffect(() => {
-    console.log('Map style changed to:', mapStyle);
     if (map.current) {
       map.current.setStyle(styles[mapStyle]);
     }
@@ -84,14 +82,6 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
 
-    // Ensure container has dimensions before initializing map
-    const rect = mapContainer.current.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
-      console.warn('Map container has no dimensions, retrying...');
-      setTimeout(() => { }, 100);
-      return;
-    }
-
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: styles[mapStyle] as any,
@@ -99,6 +89,10 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
       zoom: 2,
       attributionControl: false,
       trackResize: true
+    });
+
+    map.current.on('error', (event) => {
+      console.error('MapLibre error:', event.error);
     });
 
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
@@ -181,10 +175,33 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
         <div className="flex flex-col gap-2 pointer-events-auto">
           <button
             className="p-3 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-full text-zinc-100 hover:bg-zinc-800 shadow-lg"
-            onClick={() => setMapStyle(s => s === 'topo' ? 'satellite' : 'topo')}
+            onClick={() => setShowStylePicker(v => !v)}
           >
             <Layers size={24} />
           </button>
+
+          {showStylePicker && (
+            <div className="bg-zinc-900/90 backdrop-blur-md border border-zinc-800 rounded-2xl p-2 shadow-xl w-36">
+              <button
+                className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ${mapStyle === 'topo' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                onClick={() => {
+                  setMapStyle('topo');
+                  setShowStylePicker(false);
+                }}
+              >
+                Topografico
+              </button>
+              <button
+                className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ${mapStyle === 'satellite' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                onClick={() => {
+                  setMapStyle('satellite');
+                  setShowStylePicker(false);
+                }}
+              >
+                Satelite
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

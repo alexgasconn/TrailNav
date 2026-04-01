@@ -31,14 +31,6 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
     useEffect(() => {
         if (map.current || !mapContainer.current) return;
 
-        // Ensure container has dimensions before initializing map
-        const rect = mapContainer.current.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) {
-            console.warn('Map container has no dimensions, retrying...');
-            const timer = setTimeout(() => { }, 100);
-            return () => clearTimeout(timer);
-        }
-
         const styleConfig = {
             version: 8 as const,
             glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
@@ -52,8 +44,7 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                         'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
                     ],
                     tileSize: 256,
-                    attribution: '© OpenStreetMap contributors',
-                    crossOrigin: 'anonymous'
+                    attribution: '© OpenStreetMap contributors'
                 }
             },
             layers: [
@@ -64,8 +55,6 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                     minzoom: 0,
                     maxzoom: 19,
                     paint: {
-                        'raster-brightness-max': 0.35,
-                        'raster-saturation': -0.7,
                         'raster-opacity': 1
                     }
                 }
@@ -84,9 +73,15 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                 interactive: false,
                 trackResize: true
             });
+            map.current.on('error', (event) => {
+                console.error('MapLibre error:', event.error);
+            });
         } catch (error) {
             console.error('Map initialization error:', error);
+            return;
         }
+
+        if (!map.current) return;
 
         map.current.on('load', () => {
             if (!map.current || !route.geoJson) return;
