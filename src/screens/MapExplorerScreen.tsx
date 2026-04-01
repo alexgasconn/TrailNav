@@ -9,8 +9,13 @@ import * as turf from '@turf/turf';
 export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, onNavigate: (s: Screen, r?: Route) => void }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
+  const userMarker = useRef<maplibregl.Marker | null>(null);
+  const watchId = useRef<number | null>(null);
+  const markerHeading = useRef<number>(0);
+  const userLocation = useRef<[number, number] | null>(null);
   const [mapStyle, setMapStyle] = useState<'satellite' | 'topo'>('topo');
   const [showStylePicker, setShowStylePicker] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
 
   // OSM style - proven to work reliably
   const osmStyle = {
@@ -73,6 +78,86 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
     satellite: satStyle
   };
 
+  const syncRouteLayer = (mapInstance: maplibregl.Map) => {
+    if (!route?.geoJson) return;
+
+    if (mapInstance.getLayer('route-core')) mapInstance.removeLayer('route-core');
+    if (mapInstance.getLayer('route-casing')) mapInstance.removeLayer('route-casing');
+    if (mapInstance.getSource('route')) mapInstance.removeSource('route');
+
+    mapInstance.addSource('route', {
+      type: 'geojson',
+      data: route.geoJson
+    });
+
+    mapInstance.addLayer({
+      id: 'route-casing',
+      type: 'line',
+      source: 'route',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': '#064e3b',
+        'line-width': 8,
+        'line-opacity': 0.5
+      }
+    });
+
+    mapInstance.addLayer({
+      id: 'route-core',
+      type: 'line',
+      source: 'route',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': '#10b981',
+        'line-width': 4
+      }
+    });
+  };
+
+  const fitRoute = (mapInstance: maplibregl.Map) => {
+    if (!route?.geoJson) return;
+
+    const bbox = turf.bbox(route.geoJson);
+    mapInstance.fitBounds(bbox as [number, number, number, number], {
+      padding: 50,
+      duration: 900
+    });
+  };
+
+  const rotateUserMarker = (heading: number) => {
+    if (!userMarker.current) return;
+    const markerElement = userMarker.current.getElement();
+    markerElement.style.transform = `rotate(${heading}deg)`;
+  };
+
+  const ensureUserMarker = (mapInstance: maplibregl.Map) => {
+    if (userMarker.current) return;
+
+    const el = document.createElement('div');
+    el.className = 'w-9 h-9 bg-emerald-500 rounded-full border-2 border-white shadow-xl flex items-center justify-center transition-transform duration-200 accelerated';
+    el.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.65)';
+    el.innerHTML = '<div style="width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 10px solid white; position: relative; top: -1px;"></div>';
+
+    userMarker.current = new maplibregl.Marker({ element: el, rotationAlignment: 'map' })
+      .setLngLat([0, 0])
+      .addTo(mapInstance);
+  };
+
+  const recenterToUser = () => {
+    if (!map.current || !userLocation.current) return;
+    map.current.easeTo({
+      center: userLocation.current,
+      zoom: Math.max(15, map.current.getZoom()),
+      duration: 700
+    });
+  };
+
   useEffect(() => {
     if (map.current) {
       map.current.setStyle(styles[mapStyle]);
@@ -105,56 +190,48 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
     map.current.addControl(geolocate, 'bottom-right');
 
     map.current.on('load', () => {
-      if (route && route.geoJson && map.current) {
-        // Add route source
-        map.current.addSource('route', {
-          type: 'geojson',
-          data: route.geoJson
-        });
-
-        // Add route layer (casing)
-        map.current.addLayer({
-          id: 'route-casing',
-          type: 'line',
-          source: 'route',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#064e3b', // emerald-900
-            'line-width': 8,
-            'line-opacity': 0.5
-          }
-        });
-
-        // Add route layer (core)
-        map.current.addLayer({
-          id: 'route-core',
-          type: 'line',
-          source: 'route',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#10b981', // emerald-500
-            'line-width': 4
-          }
-        });
-
-        // Fit bounds
-        const bbox = turf.bbox(route.geoJson);
-        map.current.fitBounds(bbox as [number, number, number, number], {
-          padding: 50,
-          duration: 1000
-        });
-      }
+      if (!map.current) return;
+      syncRouteLayer(map.current);
+      fitRoute(map.current);
+      ensureUserMarker(map.current);
     });
 
+    map.current.on('style.load', () => {
+      if (!map.current) return;
+      syncRouteLayer(map.current);
+      ensureUserMarker(map.current);
+    });
+
+    if ('geolocation' in navigator) {
+      watchId.current = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude, heading } = position.coords;
+          userLocation.current = [longitude, latitude];
+          setGpsError(null);
+
+          if (!map.current) return;
+          ensureUserMarker(map.current);
+          userMarker.current?.setLngLat([longitude, latitude]);
+
+          if (typeof heading === 'number' && !Number.isNaN(heading)) {
+            markerHeading.current = heading;
+          }
+          rotateUserMarker(markerHeading.current);
+        },
+        (error) => {
+          setGpsError(error.message || 'No se pudo obtener ubicacion');
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
+      );
+    } else {
+      setGpsError('Geolocalizacion no soportada en este navegador');
+    }
+
     return () => {
+      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
       map.current?.remove();
       map.current = null;
+      userMarker.current = null;
     };
   }, [route]);
 
@@ -173,6 +250,14 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
         </button>
 
         <div className="flex flex-col gap-2 pointer-events-auto">
+          <button
+            className="p-3 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-full text-zinc-100 hover:bg-zinc-800 shadow-lg"
+            onClick={recenterToUser}
+            aria-label="Centrar en mi posicion"
+          >
+            <LocateFixed size={24} />
+          </button>
+
           <button
             className="p-3 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-full text-zinc-100 hover:bg-zinc-800 shadow-lg"
             onClick={() => setShowStylePicker(v => !v)}
@@ -226,6 +311,12 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
               Navigate
             </button>
           </div>
+        </div>
+      )}
+
+      {gpsError && (
+        <div className="absolute bottom-36 left-4 right-4 bg-red-900/80 border border-red-700 text-red-100 px-4 py-3 rounded-2xl text-sm z-10">
+          {gpsError}
         </div>
       )}
     </div>

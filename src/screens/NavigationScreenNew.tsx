@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { ArrowLeft, AlertTriangle, Compass, Pause, Play, MapPin, XCircle } from 'lucide-react';
+import { AlertTriangle, Compass, Pause, Play, XCircle } from 'lucide-react';
 import { Route } from '../lib/db';
 import { Screen } from '../App';
 import * as turf from '@turf/turf';
@@ -26,6 +26,7 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
     const timerRef = useRef<number | null>(null);
     const { lock: lockScreen } = useScreenWakeLock();
     const vibration = useVibration();
+    const cameraBearingRef = useRef<number>(0);
 
     // Initialize map once
     useEffect(() => {
@@ -66,8 +67,8 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                 container: mapContainer.current,
                 style: styleConfig as any,
                 center: [0, 0],
-                zoom: 16,
-                pitch: 45,
+                zoom: 17.8,
+                pitch: 62,
                 bearing: 0,
                 attributionControl: false,
                 interactive: false,
@@ -123,7 +124,6 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
             startTracking();
         });
 
-        // Lock screen to prevent sleep during navigation
         lockScreen().catch(console.warn);
 
         return () => {
@@ -144,6 +144,7 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
         const compassHeading = (event as any).webkitCompassHeading || (event.alpha ? Math.abs(event.alpha - 360) : null);
         if (compassHeading !== null && map.current) {
             setHeading(compassHeading);
+            cameraBearingRef.current = compassHeading;
             map.current.easeTo({ bearing: compassHeading, duration: 500 });
         }
     }, []);
@@ -173,10 +174,26 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                 const { latitude, longitude, speed: gpsSpeed, altitude, accuracy: gpsAccuracy } = position.coords;
                 const userPt = turf.point([longitude, latitude]);
 
-                // Update map and marker
+                // Update map and marker with car-style third-person camera
                 if (map.current && userMarker.current) {
                     userMarker.current.setLngLat([longitude, latitude]);
-                    map.current.easeTo({ center: [longitude, latitude], duration: 800 });
+
+                    const gpsHeading = typeof position.coords.heading === 'number' && !Number.isNaN(position.coords.heading)
+                        ? position.coords.heading
+                        : null;
+                    if (gpsHeading !== null) {
+                        cameraBearingRef.current = gpsHeading;
+                        setHeading(gpsHeading);
+                    }
+
+                    map.current.easeTo({
+                        center: [longitude, latitude],
+                        bearing: cameraBearingRef.current,
+                        pitch: 62,
+                        zoom: 17.8,
+                        offset: [0, 220] as [number, number],
+                        duration: 700,
+                    });
                 }
 
                 // Update metrics
