@@ -80,8 +80,8 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                 container: mapContainer.current,
                 style: styleConfig as any,
                 center: [0, 0],
-                zoom: 17.8,
-                pitch: 62,
+                zoom: 18,
+                pitch: 0,
                 bearing: 0,
                 attributionControl: false,
                 interactive: false,
@@ -155,10 +155,9 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
     // Handle device orientation changes
     const handleDeviceOrientation = useCallback((event: DeviceOrientationEvent) => {
         const compassHeading = (event as any).webkitCompassHeading || (event.alpha ? Math.abs(event.alpha - 360) : null);
-        if (compassHeading !== null && map.current) {
+        if (compassHeading !== null) {
             setHeading(compassHeading);
             cameraBearingRef.current = compassHeading;
-            map.current.easeTo({ bearing: compassHeading, duration: 500 });
         }
     }, []);
 
@@ -187,7 +186,7 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                 const { latitude, longitude, speed: gpsSpeed, altitude, accuracy: gpsAccuracy } = position.coords;
                 const userPt = turf.point([longitude, latitude]);
 
-                // Update map and marker with car-style third-person camera
+                // Update map and marker with simple top-down camera
                 if (map.current && userMarker.current) {
                     userMarker.current.setLngLat([longitude, latitude]);
 
@@ -197,16 +196,24 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                     if (gpsHeading !== null) {
                         cameraBearingRef.current = gpsHeading;
                         setHeading(gpsHeading);
+                        // Rotate map to face direction of travel
+                        map.current.easeTo({
+                            center: [longitude, latitude],
+                            bearing: gpsHeading,
+                            pitch: 0,
+                            zoom: 18,
+                            duration: 500,
+                        });
+                    } else {
+                        // No heading data - just center without rotation
+                        map.current.easeTo({
+                            center: [longitude, latitude],
+                            bearing: 0,
+                            pitch: 0,
+                            zoom: 18,
+                            duration: 500,
+                        });
                     }
-
-                    map.current.easeTo({
-                        center: [longitude, latitude],
-                        bearing: cameraBearingRef.current,
-                        pitch: 62,
-                        zoom: 17.8,
-                        offset: [0, 220] as [number, number],
-                        duration: 700,
-                    });
                 }
 
                 // Update metrics
@@ -281,12 +288,12 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
             {/* Map Container */}
             <div ref={mapContainer} className="w-full h-full absolute inset-0" />
 
-            {/* Top Navigation Bar */}
+            {/* Top Bar - Route Name & Exit */}
             <div className="absolute top-0 left-0 right-0 pt-safe px-4 py-3 bg-gradient-to-b from-zinc-950/95 to-transparent z-20">
                 <div className="flex justify-between items-center">
                     <button
                         onClick={() => onNavigate('analysis', route)}
-                        className="p-3 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-full text-white hover:bg-zinc-800 transition-colors shadow-lg touch-target"
+                        className="p-3 bg-red-900/80 backdrop-blur-md border border-red-800 rounded-full text-white hover:bg-red-800 transition-colors shadow-lg touch-target"
                         aria-label="Exit navigation"
                     >
                         <XCircle size={24} />
@@ -301,7 +308,7 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                                 vibration.vibrate(100);
                             }
                         }}
-                        className="p-3 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-full text-white hover:bg-zinc-800 transition-colors shadow-lg touch-target"
+                        className="p-3 bg-emerald-600/80 backdrop-blur-md border border-emerald-700 rounded-full text-white hover:bg-emerald-700 transition-colors shadow-lg touch-target"
                         aria-label={isPaused ? 'Resume' : 'Pause'}
                     >
                         {isPaused ? <Play size={24} /> : <Pause size={24} />}
@@ -309,91 +316,124 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                 </div>
             </div>
 
-            {/* Main Metrics - Top Section */}
-            <div className="absolute top-24 left-4 right-4 z-10">
-                <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 backdrop-blur-md rounded-3xl p-6 shadow-2xl">
-                    <div className="grid grid-cols-4 gap-2">
-                        <MetricBox label="Distance" value={`${(distanceToFinish / 1000).toFixed(2)}`} unit="km" />
-                        <MetricBox label="Speed" value={speed.toFixed(0)} unit="km/h" highlight={speed > 0} />
-                        <MetricBox label="Time" value={formatTime(elapsedTime)} unit="" />
-                        <MetricBox label="ETA" value={estimatedTimeRemaining.toString()} unit="min" />
+            {/* Main Metrics - Large Display at Top */}
+            <div className="absolute top-20 left-4 right-4 z-10">
+                <div className="bg-gradient-to-r from-emerald-600/90 to-teal-600/90 backdrop-blur-md rounded-3xl p-5 shadow-2xl border border-emerald-500/30">
+                    <div className="grid grid-cols-2 gap-3">
+                        <MetricBox
+                            label="Distance"
+                            value={`${(distanceToFinish / 1000).toFixed(2)}`}
+                            unit="km"
+                            size="lg"
+                        />
+                        <MetricBox
+                            label="Speed"
+                            value={speed.toFixed(0)}
+                            unit="km/h"
+                            highlight={speed > 0}
+                            size="lg"
+                        />
+                        <MetricBox
+                            label="Time"
+                            value={formatTime(elapsedTime)}
+                            unit=""
+                            size="lg"
+                        />
+                        <MetricBox
+                            label="ETA"
+                            value={estimatedTimeRemaining.toString()}
+                            unit="min"
+                            size="lg"
+                        />
                     </div>
                 </div>
             </div>
 
-            {/* Off-Route Alert */}
+            {/* Off-Route Alert - Prominent */}
             {offRoute && (
-                <div className="absolute top-48 left-4 right-4 z-10 animate-pulse">
+                <div className="absolute top-56 left-4 right-4 z-10 animate-pulse">
                     <div className="bg-red-600/95 backdrop-blur-md border-2 border-red-400 text-white px-6 py-4 rounded-2xl font-bold flex items-center gap-3 shadow-2xl shadow-red-900/50">
-                        <AlertTriangle size={28} />
+                        <AlertTriangle size={28} className="flex-shrink-0" />
                         <div>
-                            <div className="text-lg">OFF ROUTE</div>
-                            <div className="text-xs opacity-90">Return to the marked trail</div>
+                            <div className="text-lg">⚠️ OFF ROUTE</div>
+                            <div className="text-xs opacity-90">Return to marked trail - you're off course!</div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Bottom Info Panel */}
-            <div className="absolute bottom-0 left-0 right-0 pb-safe px-4 py-6 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent z-10">
-                <div className="grid grid-cols-3 gap-3 mb-4">
+            {/* Bottom Info Panel - Detailed Data */}
+            <div className="absolute bottom-0 left-0 right-0 pb-safe px-4 py-5 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent z-10">
+                {/* Elevation & Accuracy Row */}
+                <div className="grid grid-cols-3 gap-2 mb-4">
                     <InfoBox
                         label="Elevation"
                         value={elevation.toString()}
                         unit="m"
-                        icon="📏"
+                        icon="📍"
                     />
                     <InfoBox
                         label="Accuracy"
                         value={accuracy?.toString() || 'N/A'}
                         unit={accuracy ? 'm' : ''}
                         icon="🎯"
+                        color={accuracy && accuracy < 20 ? 'emerald' : accuracy && accuracy < 30 ? 'yellow' : 'red'}
                     />
                     <InfoBox
-                        label="Heading"
+                        label="Direction"
                         value={Math.round(heading).toString()}
                         unit="°"
                         icon="🧭"
                     />
                 </div>
 
+                {/* Paused Status */}
                 {isPaused && (
-                    <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-100 px-4 py-3 rounded-xl text-sm text-center font-medium">
-                        Navigation paused - Tap play to resume
+                    <div className="bg-yellow-900/60 border border-yellow-700 text-yellow-100 px-4 py-3 rounded-xl text-sm text-center font-medium">
+                        ⏸️ Navigation paused - Tap play to continue
                     </div>
                 )}
-            </div>
-
-            {/* Floating Compass */}
-            <div className="absolute bottom-24 right-4 z-10">
-                <div className="bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-full p-4 shadow-lg">
-                    <Compass
-                        size={32}
-                        className="text-emerald-500 transition-transform duration-300 accelerated"
-                        style={{ transform: `rotate(${-heading}deg)` }}
-                    />
-                </div>
             </div>
         </div>
     );
 }
 
-function MetricBox({ label, value, unit, highlight }: { label: string, value: string, unit: string, highlight?: boolean }) {
+function MetricBox({ label, value, unit, highlight, size = 'md' }: { label: string, value: string, unit: string, highlight?: boolean, size?: 'md' | 'lg' }) {
+    const sizeClasses = {
+        md: 'p-3',
+        lg: 'p-4'
+    };
+    const textClasses = {
+        md: 'text-[10px]',
+        lg: 'text-xs'
+    };
+    const valueClasses = {
+        md: 'text-lg',
+        lg: 'text-2xl'
+    };
+
     return (
-        <div className={`${highlight ? 'bg-white/20' : 'bg-white/10'} rounded-xl p-3 text-white text-center transition-colors`}>
-            <div className="text-[10px] font-semibold opacity-80 mb-1">{label}</div>
-            <div className="text-lg font-bold font-mono">{value}</div>
+        <div className={`${highlight ? 'bg-white/25 border border-white/30' : 'bg-white/10 border border-white/10'} rounded-2xl ${sizeClasses[size]} text-white text-center transition-all`}>
+            <div className={`${textClasses[size]} font-semibold opacity-80 mb-1`}>{label}</div>
+            <div className={`${valueClasses[size]} font-bold font-mono`}>{value}</div>
             {unit && <div className="text-[9px] opacity-60">{unit}</div>}
         </div>
     );
 }
 
-function InfoBox({ label, value, unit, icon }: { label: string, value: string, unit: string, icon: string }) {
+function InfoBox({ label, value, unit, icon, color = 'zinc' }: { label: string, value: string, unit: string, icon: string, color?: 'emerald' | 'yellow' | 'red' | 'zinc' }) {
+    const colorClasses = {
+        emerald: 'bg-emerald-900/60 border-emerald-800 text-emerald-100',
+        yellow: 'bg-yellow-900/60 border-yellow-800 text-yellow-100',
+        red: 'bg-red-900/60 border-red-800 text-red-100',
+        zinc: 'bg-zinc-800/60 border-zinc-700 text-zinc-100'
+    };
+
     return (
-        <div className="bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-2xl p-3 text-center">
+        <div className={`${colorClasses[color]} backdrop-blur-sm border rounded-2xl p-3 text-center transition-all`}>
             <div className="text-2xl mb-1">{icon}</div>
-            <div className="text-[10px] font-semibold text-zinc-400 mb-1">{label}</div>
-            <div className="text-lg font-bold text-white font-mono">{value}{unit && ` ${unit}`}</div>
+            <div className="text-[10px] font-semibold opacity-80 mb-1">{label}</div>
+            <div className="text-lg font-bold font-mono">{value}{unit && ` ${unit}`}</div>
         </div>
     );
 }
