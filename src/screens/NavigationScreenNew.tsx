@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+﻿import React, { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { AlertTriangle, Compass, Pause, Play, XCircle } from 'lucide-react';
+import { AlertTriangle, Pause, Play, XCircle } from 'lucide-react';
 import { Route } from '../lib/db';
 import { Screen } from '../App';
 import * as turf from '@turf/turf';
-import { useScreenWakeLock, useVibration } from '../hooks';
+import { useVibration } from '../hooks';
 
 export function NavigationScreen({ route, onNavigate }: { route: Route, onNavigate: (s: Screen, r?: Route) => void }) {
     const mapContainer = useRef<HTMLDivElement>(null);
@@ -13,7 +13,7 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
     const userMarker = useRef<maplibregl.Marker | null>(null);
 
     const [speed, setSpeed] = useState(0);
-    const [elevation, setElevation] = useState(0);
+    const [elevation, setElevation] = useState<number | null>(null);
     const [distanceToFinish, setDistanceToFinish] = useState(route.distance);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [offRoute, setOffRoute] = useState(false);
@@ -21,33 +21,36 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
     const [isPaused, setIsPaused] = useState(false);
     const [accuracy, setAccuracy] = useState<number | null>(null);
 
+    // Refs to avoid stale closures in GPS/timer callbacks
+    const isPausedRef = useRef(false);
+    const offRouteRef = useRef(false);
+
     const watchId = useRef<number | null>(null);
     const startTimeRef = useRef<number>(Date.now());
     const timerRef = useRef<number | null>(null);
-    const { lock: lockScreen } = useScreenWakeLock();
     const vibration = useVibration();
-    const cameraBearingRef = useRef<number>(0);
+    // Stable refs so GPS callback never captures stale objects
+    const vibrationRef = useRef(vibration);
+    vibrationRef.current = vibration;
+    const routeRef = useRef(route);
+    routeRef.current = route;
 
-    // Initialize map once
+    // Sync state â†’ refs (no render cost)
+    useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
+    useEffect(() => { offRouteRef.current = offRoute; }, [offRoute]);
+
+    // â”€â”€ Map init: only depends on route (stable) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
         if (map.current || !mapContainer.current) return;
 
-        // Ensure container has dimensions
         const rect = mapContainer.current.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) {
-            console.warn('Map container has no dimensions, waiting for layout...');
-            // Schedule retry with a small delay
-            const timer = setTimeout(() => {
-                // Clear map.current to allow retry
-                map.current = null;
-                // This effect will run again
-            }, 100);
-            return () => clearTimeout(timer);
+            const t = setTimeout(() => { /* trigger re-run by forcing a state update would cause flicker; instead just wait */ }, 150);
+            return () => clearTimeout(t);
         }
 
         const styleConfig = {
             version: 8 as const,
-            glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
             sources: {
                 osm: {
                     type: 'raster' as const,
@@ -55,24 +58,13 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
                         'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
                     ],
                     tileSize: 256,
-                    attribution: '© OpenStreetMap contributors'
-                }
+                    attribution: 'Â© OpenStreetMap contributors',
+                },
             },
-            layers: [
-                {
-                    id: 'osm',
-                    type: 'raster' as const,
-                    source: 'osm',
-                    minzoom: 0,
-                    maxzoom: 19,
-                    paint: {
-                        'raster-opacity': 1
-                    }
-                }
-            ]
+            layers: [{ id: 'osm', type: 'raster' as const, source: 'osm', minzoom: 0, maxzoom: 19 }],
         };
 
         try {
@@ -84,356 +76,226 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                 pitch: 0,
                 bearing: 0,
                 attributionControl: false,
-                interactive: false,
-                trackResize: true
+                interactive: true,
+                trackResize: true,
             });
-            map.current.on('error', (event) => {
-                console.error('MapLibre error:', event.error);
-            });
-        } catch (error) {
-            console.error('Map initialization error:', error);
+        } catch (e) {
+            console.error('Map init error:', e);
             return;
         }
 
-        if (!map.current) return;
+        map.current.on('error', (ev) => console.error('MapLibre:', ev.error));
 
         map.current.on('load', () => {
-            if (!map.current || !route.geoJson) return;
+            const m = map.current;
+            if (!m || !route.geoJson) return;
 
-            // Add route source
-            map.current.addSource('route', {
-                type: 'geojson',
-                data: route.geoJson
-            });
+            m.addSource('route', { type: 'geojson', data: route.geoJson });
+            m.addLayer({ id: 'route-casing', type: 'line', source: 'route', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#064e3b', 'line-width': 14, 'line-opacity': 0.9 } });
+            m.addLayer({ id: 'route-core', type: 'line', source: 'route', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#10b981', 'line-width': 7 } });
 
-            // Route shadow/casing
-            map.current.addLayer({
-                id: 'route-casing',
-                type: 'line',
-                source: 'route',
-                layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': '#064e3b', 'line-width': 14, 'line-opacity': 0.9 }
-            });
+            // Draw start/end markers
+            if (route.geoJson.features[0]?.geometry.type === 'LineString') {
+                const coords = (route.geoJson.features[0].geometry as any).coordinates as number[][];
+                if (coords.length) {
+                    const startEl = document.createElement('div');
+                    startEl.style.cssText = 'width:14px;height:14px;background:#10b981;border:3px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(16,185,129,0.8)';
+                    new maplibregl.Marker({ element: startEl }).setLngLat(coords[0] as [number, number]).addTo(m);
 
-            // Route main line
-            map.current.addLayer({
-                id: 'route-core',
-                type: 'line',
-                source: 'route',
-                layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': '#10b981', 'line-width': 7 }
-            });
+                    const endEl = document.createElement('div');
+                    endEl.style.cssText = 'width:16px;height:16px;background:#f59e0b;border:3px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(245,158,11,0.8)';
+                    new maplibregl.Marker({ element: endEl }).setLngLat(coords[coords.length - 1] as [number, number]).addTo(m);
+                }
+            }
 
-            // User location marker with better styling
+            // User location dot
             const el = document.createElement('div');
-            el.className = 'w-10 h-10 bg-emerald-500 rounded-full border-4 border-white shadow-xl flex items-center justify-center transition-transform duration-200 accelerated';
-            el.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.6), 0 0 40px rgba(16, 185, 129, 0.3)';
-            el.innerHTML = '<div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid white; position: relative; top: -2px;"></div>';
-
+            el.style.cssText = 'width:20px;height:20px;background:#3b82f6;border:3px solid #fff;border-radius:50%;box-shadow:0 0 12px rgba(59,130,246,0.8)';
             userMarker.current = new maplibregl.Marker({ element: el, rotationAlignment: 'map' })
                 .setLngLat([0, 0])
-                .addTo(map.current);
+                .addTo(m);
 
             startTracking();
         });
 
-        lockScreen().catch(console.warn);
-
         return () => {
-            if (watchId.current !== null) {
-                navigator.geolocation.clearWatch(watchId.current);
-            }
-            if (timerRef.current !== null) {
-                clearInterval(timerRef.current);
-            }
-            window.removeEventListener('deviceorientationabsolute', handleDeviceOrientation as any);
+            if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+            if (timerRef.current !== null) clearInterval(timerRef.current);
+            window.removeEventListener('deviceorientationabsolute', onOrientation as EventListener);
             map.current?.remove();
             map.current = null;
+            userMarker.current = null;
         };
-    }, [route, lockScreen]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [route]); // ONLY route â€” lockScreen intentionally excluded to prevent flicker
 
-    // Handle device orientation changes
-    const handleDeviceOrientation = useCallback((event: DeviceOrientationEvent) => {
-        const compassHeading = (event as any).webkitCompassHeading || (event.alpha ? Math.abs(event.alpha - 360) : null);
-        if (compassHeading !== null) {
-            setHeading(compassHeading);
-            cameraBearingRef.current = compassHeading;
-        }
+    // â”€â”€ Wake lock: separate effect, runs once â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    useEffect(() => {
+        (navigator as any).wakeLock?.request('screen').catch(console.warn);
     }, []);
 
-    const startTracking = useCallback(() => {
-        if (!('geolocation' in navigator)) return;
-
-        // Request permission for orientation on iOS 13+
-        if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
-            (DeviceOrientationEvent as any)
-                .requestPermission()
-                .then((response: string) => {
-                    if (response === 'granted') {
-                        window.addEventListener('deviceorientationabsolute', handleDeviceOrientation as any);
-                    }
-                })
-                .catch(console.error);
-        } else {
-            window.addEventListener('deviceorientationabsolute', handleDeviceOrientation as any);
-        }
-
-        // Start position and time tracking
-        watchId.current = navigator.geolocation.watchPosition(
-            (position) => {
-                if (isPaused) return;
-
-                const { latitude, longitude, speed: gpsSpeed, altitude, accuracy: gpsAccuracy } = position.coords;
-                const userPt = turf.point([longitude, latitude]);
-
-                // Update map and marker with simple top-down camera
-                if (map.current && userMarker.current) {
-                    userMarker.current.setLngLat([longitude, latitude]);
-
-                    const gpsHeading = typeof position.coords.heading === 'number' && !Number.isNaN(position.coords.heading)
-                        ? position.coords.heading
-                        : null;
-                    if (gpsHeading !== null) {
-                        cameraBearingRef.current = gpsHeading;
-                        setHeading(gpsHeading);
-                        // Rotate map to face direction of travel
-                        map.current.easeTo({
-                            center: [longitude, latitude],
-                            bearing: gpsHeading,
-                            pitch: 0,
-                            zoom: 18,
-                            duration: 500,
-                        });
-                    } else {
-                        // No heading data - just center without rotation
-                        map.current.easeTo({
-                            center: [longitude, latitude],
-                            bearing: 0,
-                            pitch: 0,
-                            zoom: 18,
-                            duration: 500,
-                        });
-                    }
-                }
-
-                // Update metrics
-                setSpeed(gpsSpeed ? gpsSpeed * 3.6 : 0); // Convert m/s to km/h
-                if (altitude) setElevation(Math.round(altitude));
-                if (gpsAccuracy) setAccuracy(Math.round(gpsAccuracy));
-
-                // Check if off route
-                if (route.geoJson) {
-                    const lineFeature = route.geoJson.features[0];
-                    const lineGeometry = lineFeature.geometry.type === 'LineString'
-                        ? turf.lineString(lineFeature.geometry.coordinates)
-                        : turf.lineString(lineFeature.geometry.coordinates[0]);
-
-                    const distanceToRoute = turf.pointToLineDistance(userPt, lineGeometry, { units: 'meters' });
-
-                    if (distanceToRoute > 30 && !offRoute) {
-                        setOffRoute(true);
-                        vibration.vibrate([100, 50, 100]); // Double vibration for off-route
-                        if (map.current) {
-                            map.current.setPaintProperty('route-core', 'line-color', '#ef4444');
-                        }
-                    } else if (distanceToRoute <= 25 && offRoute) {
-                        setOffRoute(false);
-                        vibration.vibrate(60); // Single vibration for back on-route
-                        if (map.current) {
-                            map.current.setPaintProperty('route-core', 'line-color', '#10b981');
-                        }
-                    }
-
-                    // Calculate remaining distance
-                    const coords = lineGeometry.geometry.coordinates;
-                    const endPt = turf.point(coords[coords.length - 1]);
-                    const dist = turf.distance(userPt, endPt, { units: 'kilometers' }) * 1000;
-                    setDistanceToFinish(dist);
-                }
-            },
-            (error) => {
-                console.error('Geolocation error:', error);
-                if (error.code === 1) {
-                    alert('Location permission denied. Please enable location in settings.');
-                }
-            },
-            { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
-        );
-    }, [route, isPaused, offRoute, vibration, handleDeviceOrientation]);
-
-    // Update elapsed time
+    // â”€â”€ Timer: restarts only when isPaused changes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
         if (isPaused) return;
-
         timerRef.current = window.setInterval(() => {
             setElapsedTime(Math.floor((Date.now() - startTimeRef.current) / 1000));
         }, 1000);
-
-        return () => {
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
+        return () => { if (timerRef.current) clearInterval(timerRef.current); };
     }, [isPaused]);
 
-    const formatTime = (seconds: number): string => {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        const secs = seconds % 60;
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    // â”€â”€ Orientation handler: stable, uses refs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const onOrientation = useCallback((event: DeviceOrientationEvent) => {
+        const h = (event as any).webkitCompassHeading ?? (event.alpha != null ? (360 - event.alpha) % 360 : null);
+        if (h !== null) setHeading(h);
+    }, []);
+
+    // â”€â”€ GPS tracking: stable callback, reads state via refs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const startTracking = useCallback(() => {
+        if (!('geolocation' in navigator)) return;
+
+        if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+            (DeviceOrientationEvent as any).requestPermission()
+                .then((r: string) => { if (r === 'granted') window.addEventListener('deviceorientationabsolute', onOrientation as EventListener); })
+                .catch(console.error);
+        } else {
+            window.addEventListener('deviceorientationabsolute', onOrientation as EventListener);
+        }
+
+        watchId.current = navigator.geolocation.watchPosition(
+            (pos) => {
+                if (isPausedRef.current) return;
+
+                const { latitude: lat, longitude: lng, speed: spd, altitude: alt, accuracy: acc, heading: gpsHdg } = pos.coords;
+                const userPt = turf.point([lng, lat]);
+
+                if (map.current && userMarker.current) {
+                    userMarker.current.setLngLat([lng, lat]);
+
+                    const bearing = typeof gpsHdg === 'number' && !isNaN(gpsHdg) ? gpsHdg : 0;
+                    if (typeof gpsHdg === 'number' && !isNaN(gpsHdg)) setHeading(gpsHdg);
+
+                    map.current.easeTo({ center: [lng, lat], bearing, pitch: 0, zoom: 18, duration: 400 });
+                }
+
+                setSpeed(spd ? spd * 3.6 : 0);
+                if (alt != null) setElevation(Math.round(alt));
+                if (acc != null) setAccuracy(Math.round(acc));
+
+                const r = routeRef.current;
+                if (r.geoJson?.features[0]) {
+                    const geom = r.geoJson.features[0].geometry;
+                    const coords = geom.type === 'LineString' ? geom.coordinates : (geom as any).coordinates[0];
+                    const line = turf.lineString(coords);
+                    const dist = turf.pointToLineDistance(userPt, line, { units: 'meters' });
+
+                    if (dist > 30 && !offRouteRef.current) {
+                        offRouteRef.current = true;
+                        setOffRoute(true);
+                        vibrationRef.current.vibrate([100, 50, 100]);
+                        map.current?.setPaintProperty('route-core', 'line-color', '#ef4444');
+                    } else if (dist <= 25 && offRouteRef.current) {
+                        offRouteRef.current = false;
+                        setOffRoute(false);
+                        vibrationRef.current.vibrate(60);
+                        map.current?.setPaintProperty('route-core', 'line-color', '#10b981');
+                    }
+
+                    const endPt = turf.point(coords[coords.length - 1]);
+                    setDistanceToFinish(turf.distance(userPt, endPt, { units: 'kilometers' }) * 1000);
+                }
+            },
+            (err) => { console.error('GPS error:', err); },
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
+        );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [onOrientation]); // stable â€” all mutable state read via refs
+
+    const formatTime = (s: number) => {
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     };
 
-    const estimatedTimeRemaining = speed > 0 ? Math.round((distanceToFinish / 1000) / (speed / 3.6)) : 0;
+    const eta = speed > 0.5 ? Math.round((distanceToFinish / 1000) / (speed / 3.6) / 60) : null;
 
     return (
         <div className="w-full h-full bg-zinc-950 relative overflow-hidden">
-            {/* Map Container */}
+            {/* Map */}
             <div ref={mapContainer} className="w-full h-full absolute inset-0" />
 
-            {/* Top Bar - Route Name & Exit */}
-            <div className="absolute top-0 left-0 right-0 pt-safe px-4 py-3 bg-gradient-to-b from-zinc-950/95 to-transparent z-20">
-                <div className="flex justify-between items-center">
+            {/* Top Bar */}
+            <div className="absolute top-0 left-0 right-0 pt-safe px-4 py-3 bg-gradient-to-b from-zinc-950/90 to-transparent z-20 pointer-events-none">
+                <div className="flex justify-between items-center pointer-events-auto">
                     <button
-                        onClick={() => onNavigate('analysis', route)}
-                        className="p-3 bg-red-900/80 backdrop-blur-md border border-red-800 rounded-full text-white hover:bg-red-800 transition-colors shadow-lg touch-target"
-                        aria-label="Exit navigation"
+                        onClick={() => onNavigate('home')}
+                        className="p-3 bg-red-900/80 backdrop-blur border border-red-800 rounded-full text-white hover:bg-red-800 transition-colors shadow-lg touch-target"
                     >
-                        <XCircle size={24} />
+                        <XCircle size={22} />
                     </button>
-
-                    <h2 className="text-white font-bold text-lg flex-1 text-center px-4">{route.name}</h2>
-
-                    <button
-                        onClick={() => {
-                            setIsPaused(!isPaused);
-                            if (!isPaused) {
-                                vibration.vibrate(100);
-                            }
-                        }}
-                        className="p-3 bg-emerald-600/80 backdrop-blur-md border border-emerald-700 rounded-full text-white hover:bg-emerald-700 transition-colors shadow-lg touch-target"
-                        aria-label={isPaused ? 'Resume' : 'Pause'}
-                    >
-                        {isPaused ? <Play size={24} /> : <Pause size={24} />}
-                    </button>
-                </div>
-            </div>
-
-            {/* Main Metrics - Large Display at Top */}
-            <div className="absolute top-20 left-4 right-4 z-10">
-                <div className="bg-gradient-to-r from-emerald-600/90 to-teal-600/90 backdrop-blur-md rounded-3xl p-5 shadow-2xl border border-emerald-500/30">
-                    <div className="grid grid-cols-2 gap-3">
-                        <MetricBox
-                            label="Distance"
-                            value={`${(distanceToFinish / 1000).toFixed(2)}`}
-                            unit="km"
-                            size="lg"
-                        />
-                        <MetricBox
-                            label="Speed"
-                            value={speed.toFixed(0)}
-                            unit="km/h"
-                            highlight={speed > 0}
-                            size="lg"
-                        />
-                        <MetricBox
-                            label="Time"
-                            value={formatTime(elapsedTime)}
-                            unit=""
-                            size="lg"
-                        />
-                        <MetricBox
-                            label="ETA"
-                            value={estimatedTimeRemaining.toString()}
-                            unit="min"
-                            size="lg"
-                        />
+                    <div className="bg-zinc-900/80 backdrop-blur border border-zinc-800 rounded-2xl px-4 py-2 mx-2 flex-1 text-center">
+                        <p className="text-white font-semibold text-sm truncate">{route.name}</p>
                     </div>
+                    <button
+                        onClick={() => { setIsPaused(p => !p); if (!isPaused) startTimeRef.current += Date.now() - startTimeRef.current; }}
+                        className="p-3 bg-zinc-900/80 backdrop-blur border border-zinc-700 rounded-full text-white hover:bg-zinc-800 transition-colors shadow-lg touch-target"
+                    >
+                        {isPaused ? <Play size={22} /> : <Pause size={22} />}
+                    </button>
                 </div>
             </div>
 
-            {/* Off-Route Alert - Prominent */}
-            {offRoute && (
-                <div className="absolute top-56 left-4 right-4 z-10 animate-pulse">
-                    <div className="bg-red-600/95 backdrop-blur-md border-2 border-red-400 text-white px-6 py-4 rounded-2xl font-bold flex items-center gap-3 shadow-2xl shadow-red-900/50">
-                        <AlertTriangle size={28} className="flex-shrink-0" />
+            {/* Stats panel */}
+            <div className="absolute bottom-0 left-0 right-0 pb-safe z-20 pointer-events-none">
+
+                {/* Off-route alert */}
+                {offRoute && (
+                    <div className="mx-4 mb-3 bg-red-600/95 border-2 border-red-400 text-white px-4 py-3 rounded-2xl flex items-center gap-3 shadow-xl">
+                        <AlertTriangle size={24} className="flex-shrink-0" />
                         <div>
-                            <div className="text-lg">⚠️ OFF ROUTE</div>
-                            <div className="text-xs opacity-90">Return to marked trail - you're off course!</div>
+                            <div className="font-bold text-sm">FUERA DE RUTA</div>
+                            <div className="text-xs opacity-90">Vuelve al sendero marcado</div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Bottom Info Panel - Detailed Data */}
-            <div className="absolute bottom-0 left-0 right-0 pb-safe px-4 py-5 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent z-10">
-                {/* Elevation & Accuracy Row */}
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                    <InfoBox
-                        label="Elevation"
-                        value={elevation.toString()}
-                        unit="m"
-                        icon="📍"
-                    />
-                    <InfoBox
-                        label="Accuracy"
-                        value={accuracy?.toString() || 'N/A'}
-                        unit={accuracy ? 'm' : ''}
-                        icon="🎯"
-                        color={accuracy && accuracy < 20 ? 'emerald' : accuracy && accuracy < 30 ? 'yellow' : 'red'}
-                    />
-                    <InfoBox
-                        label="Direction"
-                        value={Math.round(heading).toString()}
-                        unit="°"
-                        icon="🧭"
-                    />
-                </div>
-
-                {/* Paused Status */}
                 {isPaused && (
-                    <div className="bg-yellow-900/60 border border-yellow-700 text-yellow-100 px-4 py-3 rounded-xl text-sm text-center font-medium">
-                        ⏸️ Navigation paused - Tap play to continue
+                    <div className="mx-4 mb-3 bg-yellow-900/80 border border-yellow-700 text-yellow-100 px-4 py-3 rounded-2xl text-sm text-center font-medium">
+                        â¸ Pausado â€” toca â–¶ para continuar
                     </div>
                 )}
+
+                {/* Main numbers */}
+                <div className="bg-zinc-900/95 backdrop-blur border-t border-zinc-800 px-4 pt-4 pb-2">
+                    <div className="grid grid-cols-4 gap-2 mb-3">
+                        <StatCard label="Distancia" value={(distanceToFinish / 1000).toFixed(2)} unit="km" big />
+                        <StatCard label="Velocidad" value={speed.toFixed(0)} unit="km/h" big accent={speed > 0.5} />
+                        <StatCard label="Tiempo" value={formatTime(elapsedTime)} unit="" big />
+                        <StatCard label="ETA" value={eta != null ? String(eta) : 'â€”'} unit={eta != null ? 'min' : ''} big />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        <StatCard label="ElevaciÃ³n" value={elevation != null ? String(elevation) : 'â€”'} unit={elevation != null ? 'm' : ''} />
+                        <StatCard
+                            label="PrecisiÃ³n GPS"
+                            value={accuracy != null ? String(accuracy) : 'â€”'}
+                            unit={accuracy != null ? 'm' : ''}
+                            warn={accuracy != null && accuracy > 25}
+                        />
+                        <StatCard label="Rumbo" value={`${Math.round(heading)}Â°`} unit="" />
+                    </div>
+                </div>
             </div>
         </div>
     );
 }
 
-function MetricBox({ label, value, unit, highlight, size = 'md' }: { label: string, value: string, unit: string, highlight?: boolean, size?: 'md' | 'lg' }) {
-    const sizeClasses = {
-        md: 'p-3',
-        lg: 'p-4'
-    };
-    const textClasses = {
-        md: 'text-[10px]',
-        lg: 'text-xs'
-    };
-    const valueClasses = {
-        md: 'text-lg',
-        lg: 'text-2xl'
-    };
-
+function StatCard({ label, value, unit, big, accent, warn }: { label: string, value: string, unit: string, big?: boolean, accent?: boolean, warn?: boolean }) {
+    const bg = warn ? 'bg-red-900/40 border-red-800' : accent ? 'bg-emerald-900/50 border-emerald-700' : 'bg-zinc-800/60 border-zinc-700';
+    const valueColor = warn ? 'text-red-300' : accent ? 'text-emerald-300' : 'text-white';
     return (
-        <div className={`${highlight ? 'bg-white/25 border border-white/30' : 'bg-white/10 border border-white/10'} rounded-2xl ${sizeClasses[size]} text-white text-center transition-all`}>
-            <div className={`${textClasses[size]} font-semibold opacity-80 mb-1`}>{label}</div>
-            <div className={`${valueClasses[size]} font-bold font-mono`}>{value}</div>
-            {unit && <div className="text-[9px] opacity-60">{unit}</div>}
+        <div className={`${bg} border rounded-xl px-2 py-2 text-center`}>
+            <div className="text-zinc-400 text-[9px] font-semibold uppercase tracking-wide mb-1">{label}</div>
+            <div className={`${valueColor} ${big ? 'text-xl' : 'text-base'} font-bold font-mono leading-none`}>{value}</div>
+            {unit && <div className="text-zinc-500 text-[9px] mt-0.5">{unit}</div>}
         </div>
     );
 }
 
-function InfoBox({ label, value, unit, icon, color = 'zinc' }: { label: string, value: string, unit: string, icon: string, color?: 'emerald' | 'yellow' | 'red' | 'zinc' }) {
-    const colorClasses = {
-        emerald: 'bg-emerald-900/60 border-emerald-800 text-emerald-100',
-        yellow: 'bg-yellow-900/60 border-yellow-800 text-yellow-100',
-        red: 'bg-red-900/60 border-red-800 text-red-100',
-        zinc: 'bg-zinc-800/60 border-zinc-700 text-zinc-100'
-    };
-
-    return (
-        <div className={`${colorClasses[color]} backdrop-blur-sm border rounded-2xl p-3 text-center transition-all`}>
-            <div className="text-2xl mb-1">{icon}</div>
-            <div className="text-[10px] font-semibold opacity-80 mb-1">{label}</div>
-            <div className="text-lg font-bold font-mono">{value}{unit && ` ${unit}`}</div>
-        </div>
-    );
-}
