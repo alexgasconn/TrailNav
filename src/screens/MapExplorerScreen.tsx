@@ -167,6 +167,19 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
 
+    // Ensure container has dimensions
+    const rect = mapContainer.current.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      console.warn('Map container has no dimensions, waiting for layout...');
+      // Schedule retry with a small delay
+      const timer = setTimeout(() => {
+        // Clear map.current to allow retry
+        map.current = null;
+        // This effect will run again
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: styles[mapStyle] as any,
@@ -236,9 +249,9 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
   }, [route]);
 
   return (
-    <div className="relative w-full h-full bg-zinc-950">
+    <div className="w-full h-full bg-zinc-950 relative overflow-hidden">
       {/* Map Container */}
-      <div ref={mapContainer} className="absolute inset-0" />
+      <div ref={mapContainer} className="w-full h-full absolute inset-0" />
 
       {/* Top Bar Overlay */}
       <div className="absolute top-0 left-0 right-0 p-4 pt-8 bg-gradient-to-b from-zinc-950/80 to-transparent pointer-events-none flex justify-between items-start z-10">

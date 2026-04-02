@@ -32,6 +32,19 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
     useEffect(() => {
         if (map.current || !mapContainer.current) return;
 
+        // Ensure container has dimensions
+        const rect = mapContainer.current.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            console.warn('Map container has no dimensions, waiting for layout...');
+            // Schedule retry with a small delay
+            const timer = setTimeout(() => {
+                // Clear map.current to allow retry
+                map.current = null;
+                // This effect will run again
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+
         const styleConfig = {
             version: 8 as const,
             glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
@@ -264,9 +277,9 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
     const estimatedTimeRemaining = speed > 0 ? Math.round((distanceToFinish / 1000) / (speed / 3.6)) : 0;
 
     return (
-        <div className="relative w-full h-full bg-zinc-950 overflow-hidden">
+        <div className="w-full h-full bg-zinc-950 relative overflow-hidden">
             {/* Map Container */}
-            <div ref={mapContainer} className="absolute inset-0" />
+            <div ref={mapContainer} className="w-full h-full absolute inset-0" />
 
             {/* Top Navigation Bar */}
             <div className="absolute top-0 left-0 right-0 pt-safe px-4 py-3 bg-gradient-to-b from-zinc-950/95 to-transparent z-20">

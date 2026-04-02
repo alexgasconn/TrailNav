@@ -114,7 +114,10 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative scrollable">
+      <main className={`flex-1 relative ${currentScreen === 'map' || currentScreen === 'navigation'
+          ? 'overflow-hidden'
+          : 'overflow-y-auto scrollable'
+        }`}>
         {currentScreen === 'home' && <HomeScreen onNavigate={navigate} />}
         {currentScreen === 'import' && <RouteImportScreen onNavigate={navigate} />}
         {currentScreen === 'analysis' && selectedRoute && <RouteAnalysisScreen route={selectedRoute} onNavigate={navigate} />}
