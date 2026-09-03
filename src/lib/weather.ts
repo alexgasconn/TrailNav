@@ -9,6 +9,12 @@ export interface RouteWeatherSample {
     precipitationProbability: number;
     windSpeed: number;
     weatherCode: number;
+    // hourly arrays for plotting
+    hourly?: {
+        time: number[]; // ms timestamps
+        temperature: number[];
+        precipitationProbability: number[];
+    };
 }
 
 export interface RouteWeatherTimeline {
@@ -33,8 +39,9 @@ function readCache(routeId: string): RouteWeatherTimeline | null {
     }
 }
 
-export async function getRouteWeather(route: Route, etaMinutes: number, forceRefresh = false): Promise<RouteWeatherTimeline> {
-    const cached = readCache(route.id);
+export async function getRouteWeather(route: Route, etaMinutes: number, startTimestamp?: number, forceRefresh = false): Promise<RouteWeatherTimeline> {
+    const cacheId = `${route.id}:${etaMinutes}:${startTimestamp ?? 0}`;
+    const cached = readCache(cacheId);
     if (!forceRefresh && cached && Date.now() - cached.updatedAt < CACHE_DURATION) {
         return { ...cached, fromCache: true };
     }
@@ -49,45 +56,56 @@ export async function getRouteWeather(route: Route, etaMinutes: number, forceRef
     ];
 
     try {
-        const samples = await Promise.all(sampleDefinitions.map(async ({ ratio, label }) => {
-            const coordinate = coordinates[Math.round((coordinates.length - 1) * ratio)];
-            const arrivalTime = Date.now() + etaMinutes * ratio * 60_000;
-            const params = new URLSearchParams({
-                latitude: String(coordinate[1]),
-                longitude: String(coordinate[0]),
-                hourly: 'temperature_2m,precipitation_probability,weather_code,wind_speed_10m',
-                forecast_days: '7',
-                timezone: 'auto',
-            });
-            const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
-            if (!response.ok) throw new Error('Open-Meteo no está disponible');
-            const data = await response.json();
+        const samples = await Promise.all(
+            sampleDefinitions.map(async ({ ratio, label }) => {
+                const coordinate = coordinates[Math.round((coordinates.length - 1) * ratio)];
+                const arrivalTime = (startTimestamp ?? Date.now()) + etaMinutes * ratio * 60_000;
+                const params = new URLSearchParams({
+                    latitude: String(coordinate[1]),
+                    longitude: String(coordinate[0]),
+                    hourly: 'time,temperature_2m,precipitation_probability,weather_code,wind_speed_10m',
+                    forecast_days: '7',
+                    timezone: 'auto',
+                });
+                const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+                if (!response.ok) throw new Error('Open-Meteo no está disponible');
+                const data = await response.json();
 
-            // Las horas llegan en hora local del punto; se busca la más próxima a la llegada estimada.
-            const times: string[] = data.hourly.time;
-            let index = 0;
-            let bestDelta = Infinity;
-            times.forEach((time, position) => {
-                const delta = Math.abs(new Date(time).getTime() - arrivalTime);
-                if (delta < bestDelta) {
-                    bestDelta = delta;
-                    index = position;
-                }
-            });
+                const times: string[] = data.hourly.time ?? [];
+                const timeMs = times.map((t) => new Date(t).getTime());
 
-            return {
-                label,
-                distance: route.distance * ratio,
-                arrivalTime,
-                temperature: Math.round(data.hourly.temperature_2m[index]),
-                precipitationProbability: Math.round(data.hourly.precipitation_probability[index] ?? 0),
-                windSpeed: Math.round(data.hourly.wind_speed_10m[index] ?? 0),
-                weatherCode: Number(data.hourly.weather_code[index] ?? 0),
-            };
-        }));
+                // find nearest index to arrivalTime
+                let index = 0;
+                let bestDelta = Infinity;
+                timeMs.forEach((t, position) => {
+                    const delta = Math.abs(t - arrivalTime);
+                    if (delta < bestDelta) {
+                        bestDelta = delta;
+                        index = position;
+                    }
+                });
+
+                return {
+                    label,
+                    distance: route.distance * ratio,
+                    arrivalTime,
+                    temperature: Math.round((data.hourly.temperature_2m?.[index] ?? 0)),
+                    precipitationProbability: Math.round((data.hourly.precipitation_probability?.[index] ?? 0)),
+                    windSpeed: Math.round((data.hourly.wind_speed_10m?.[index] ?? 0)),
+                    weatherCode: Number((data.hourly.weather_code?.[index] ?? 0)),
+                    hourly: {
+                        time: timeMs,
+                        temperature: (data.hourly.temperature_2m ?? []).map((v: any) => Math.round(v)),
+                        precipitationProbability: (data.hourly.precipitation_probability ?? []).map((v: any) => Math.round(v ?? 0)),
+                    },
+                } as RouteWeatherSample;
+            })
+        );
 
         const timeline = { samples, updatedAt: Date.now(), fromCache: false };
-        localStorage.setItem(cacheKey(route.id), JSON.stringify(timeline));
+        try {
+            localStorage.setItem(cacheKey(cacheId), JSON.stringify(timeline));
+        } catch { }
         return timeline;
     } catch (error) {
         if (cached) return { ...cached, fromCache: true };

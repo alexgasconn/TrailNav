@@ -200,7 +200,7 @@ function RouteCard({
 
             <div className="flex gap-2 px-4 pb-4">
                 <button onClick={onOpen} className="flex-1 h-11 rounded-xl border border-line text-ink text-sm font-medium">
-                    Preparar
+                    Análisis
                 </button>
                 <button
                     onClick={onNavigateRoute}
