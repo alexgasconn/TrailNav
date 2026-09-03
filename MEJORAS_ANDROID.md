@@ -250,5 +250,5 @@ O usar Chrome DevTools:
 ---
 
 **Versión:** 2.0.0  
-**Última actualización:** 2026-03-31  
+**Última actualización:** 2026-09-03  
 **Estado:** Producción Ready ✅

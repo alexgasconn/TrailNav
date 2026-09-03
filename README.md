@@ -10,7 +10,10 @@
 
 [Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Improvements](#-android-optimizations) • [Development](#-development)
 
+
 </div>
+
+<!-- Last updated: 2026-09-03 -->
 
 ---
 
