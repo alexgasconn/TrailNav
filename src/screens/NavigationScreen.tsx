@@ -143,7 +143,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                         containerRef.current.style.width = '100%';
                         containerRef.current.style.minHeight = '100dvh';
                         containerRef.current.style.height = '100dvh';
-                        try { (containerRef.current as HTMLElement).style.zIndex = '0'; } catch { }
+                        
                     }
                 } catch { }
 
@@ -162,79 +162,10 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     // also nudge map to redraw at the current center/zoom
                     try {
                         map.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
-                        try { (map.getContainer() as HTMLElement).style.zIndex = '0'; } catch { }
                     } catch { }
                 }, 250);
 
                 setMapReady(true);
-
-                // Verify the canvas was created and has non-zero size. If not, attempt
-                // a single automatic re-init (helps when some browsers compute 0x0 on
-                // first mount due to layout timing). We guard with `initAttempt` so
-                // we don't loop forever.
-                const verifyCanvas = () => {
-                    try {
-                        const c = map.getContainer().querySelector('canvas');
-                        const rect = c ? (c as HTMLElement).getBoundingClientRect() : null;
-                        if (!c || !rect || rect.width === 0 || rect.height === 0) {
-                            console.warn('Map canvas missing or zero-sized, retrying map init');
-                            try {
-                                map.remove();
-                            } catch { }
-                            mapRef.current = null;
-                            // bump initAttempt so the effect re-runs and rebuilds the map
-                            setInitAttempt((v) => v + 1);
-                        }
-                    } catch (e) {
-                        console.warn('Error verifying map canvas', e);
-                    }
-                };
-
-                // run verify shortly after load and once more after layout settles
-                window.setTimeout(verifyCanvas, 300);
-                window.setTimeout(verifyCanvas, 1000);
-
-                // Aggressive visibility fix for debugging: force the map container
-                // and canvas to a high z-index so the map cannot be fully covered
-                // by accidental opaque overlays. Also add a small diagnostic
-                // overlay showing container/canvas bounds and the top element at
-                // the center of the viewport. This is temporary to diagnose why
-                // the map was invisible for the user.
-                try {
-                    const mc = map.getContainer() as HTMLElement;
-                    mc.style.zIndex = '30';
-                    try { const c = mc.querySelector('canvas') as HTMLElement; if (c) c.style.zIndex = '31'; } catch { }
-
-                    const dbg = document.createElement('div');
-                    dbg.id = '__trailnav_map_dbg';
-                    dbg.style.position = 'fixed';
-                    dbg.style.right = '8px';
-                    dbg.style.top = '8px';
-                    dbg.style.zIndex = '999999';
-                    dbg.style.background = 'rgba(0,0,0,0.6)';
-                    dbg.style.color = 'white';
-                    dbg.style.padding = '6px 8px';
-                    dbg.style.fontSize = '12px';
-                    dbg.style.borderRadius = '8px';
-                    dbg.style.pointerEvents = 'none';
-                    document.body.appendChild(dbg);
-
-                    const updateDbg = () => {
-                        try {
-                            const crect = containerRef.current?.getBoundingClientRect();
-                            const canvas = mc.querySelector('canvas');
-                            const crectC = canvas ? (canvas as HTMLElement).getBoundingClientRect() : null;
-                            const elAtCenter = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-                            dbg.innerText = `container: ${crect?.width?.toFixed(0)}x${crect?.height?.toFixed(0)}\ncanvas: ${crectC?.width?.toFixed(0)}x${crectC?.height?.toFixed(0)}\ntop: ${elAtCenter?.tagName || 'none'}`;
-                        } catch { }
-                    };
-                    updateDbg();
-                    const dbgI = window.setInterval(updateDbg, 500);
-
-                    map.on('remove', () => {
-                        try { window.clearInterval(dbgI); dbg.remove(); } catch { }
-                    });
-                } catch (e) { console.warn('Failed to apply aggressive map debug fix', e); }
 
                 // Add window resize / orientation handlers to keep the canvas correct.
                 const onWindowResize = () => safeResize();
