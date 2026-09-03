@@ -7,13 +7,12 @@ import { getRouteProfile } from '../lib/routeProfile';
 import { getRoutePoints } from '../lib/routePoints';
 import { estimateRouteTime } from '../lib/eta';
 import { RouteWeatherPanel } from '../components/RouteWeatherPanel';
+import ProfileChart from '../components/ProfileChart';
 import { formatDistance, formatDuration, formatElevation, formatSlope } from '../lib/format';
 import { useNavigationSession } from '../state/navigationSession';
 
 export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNavigate: (s: Screen, r?: Route) => void }) {
     const session = useNavigationSession();
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-
     const profile = useMemo(() => getRouteProfile(route), [route]);
     const analysis = useMemo(() => analyzeRoute(route), [route]);
     const points = useMemo(() => getRoutePoints(route), [route]);
@@ -22,56 +21,7 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
         [profile, analysis, route.distance]
     );
 
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas || !profile.hasElevation) return;
-
-        const ratio = window.devicePixelRatio || 1;
-        const width = canvas.clientWidth;
-        const height = canvas.clientHeight;
-        canvas.width = width * ratio;
-        canvas.height = height * ratio;
-
-        const context = canvas.getContext('2d');
-        if (!context) return;
-        context.scale(ratio, ratio);
-        context.clearRect(0, 0, width, height);
-
-        const range = profile.maxElevation - profile.minElevation || 1;
-        const padding = 10;
-        const usableHeight = height - padding * 2;
-
-        const toX = (distance: number) => (distance / (profile.totalDistance || 1)) * width;
-        const toY = (elevation: number) => height - padding - ((elevation - profile.minElevation) / range) * usableHeight;
-
-        // Un punto por píxel evita recorrer decenas de miles de vértices.
-        const step = Math.max(1, Math.floor(profile.coordinates.length / width));
-
-        context.beginPath();
-        context.moveTo(0, height);
-        for (let i = 0; i < profile.coordinates.length; i += step) {
-            context.lineTo(toX(profile.cumulativeDistance[i]), toY(profile.elevation[i]));
-        }
-        context.lineTo(width, height);
-        context.closePath();
-
-        const gradient = context.createLinearGradient(0, 0, 0, height);
-        gradient.addColorStop(0, 'rgba(63, 107, 82, 0.35)');
-        gradient.addColorStop(1, 'rgba(63, 107, 82, 0.03)');
-        context.fillStyle = gradient;
-        context.fill();
-
-        context.beginPath();
-        for (let i = 0; i < profile.coordinates.length; i += step) {
-            const x = toX(profile.cumulativeDistance[i]);
-            const y = toY(profile.elevation[i]);
-            if (i === 0) context.moveTo(x, y);
-            else context.lineTo(x, y);
-        }
-        context.strokeStyle = '#3f6b52';
-        context.lineWidth = 1.75;
-        context.stroke();
-    }, [profile]);
+    // Profile chart is rendered by ProfileChart component below
 
     const isActiveRoute = session.status !== 'idle' && session.route?.id === route.id;
 
@@ -110,7 +60,7 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
                         )}
                     </div>
                     {profile.hasElevation ? (
-                        <canvas ref={canvasRef} className="w-full h-40 block" />
+                        <ProfileChart profile={profile} height={160} />
                     ) : (
                         <p className="text-sm text-ink-soft py-6 text-center">
                             Este archivo GPX no incluye datos de altitud, por lo que no se puede calcular el desnivel.

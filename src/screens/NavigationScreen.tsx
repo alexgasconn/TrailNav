@@ -28,6 +28,7 @@ import {
     formatSpeed,
     formatTimeOfDay,
 } from '../lib/format';
+import ProfileChart from '../components/ProfileChart';
 
 export function NavigationScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) => void }) {
     const session = useNavigationSession();
@@ -124,7 +125,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                         containerRef.current.style.minHeight = '100dvh';
                         containerRef.current.style.height = '100dvh';
                     }
-                } catch {}
+                } catch { }
 
                 // Force a resize after load and again shortly after to ensure the canvas
                 // fills the container (fixes cases where only the lower part is visible).
@@ -141,7 +142,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     // also nudge map to redraw at the current center/zoom
                     try {
                         map.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
-                    } catch {}
+                    } catch { }
                 }, 250);
 
                 setMapReady(true);
@@ -185,7 +186,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                                 const canvas = map.getContainer().querySelector('canvas');
                                 const crectC = canvas ? canvas.getBoundingClientRect() : null;
                                 dbg.innerText = `container: ${crect?.width?.toFixed(0)}x${crect?.height?.toFixed(0)}\ncanvas: ${crectC?.width?.toFixed(0)}x${crectC?.height?.toFixed(0)}\nscrollY:${window.scrollY}`;
-                            } catch {}
+                            } catch { }
                         };
                         updateDbg();
                         const dbgI = window.setInterval(updateDbg, 500);
@@ -194,7 +195,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                             dbg.remove();
                         }, 15000);
                     }
-                } catch {}
+                } catch { }
             });
         });
 
@@ -207,7 +208,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 try {
                     const m = mapRef.current as any;
                     if (m.__trailnav_clearLater) m.__trailnav_clearLater();
-                } catch {}
+                } catch { }
                 mapRef.current.remove();
             }
             mapRef.current = null;
@@ -338,6 +339,11 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 )}
 
                 <div className="bg-surface-soft/95 backdrop-blur border-t border-line pt-3 pb-3">
+                    {profile.hasElevation && (
+                        <div className="px-4 pb-2">
+                            <ProfileChart profile={profile} height={72} currentDistance={metrics?.distanceDone ?? null} />
+                        </div>
+                    )}
                     <MetricPanels panels={panels} />
 
                     <div className="flex gap-2 px-4 pt-4">
