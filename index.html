@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 
 <head>
   <meta charset="UTF-8" />
@@ -7,18 +7,18 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, user-scalable=yes" />
   <meta name="apple-mobile-web-app-capable" content="true" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="TrailNav" />
 
   <!-- Android specific -->
-  <meta name="theme-color" content="#10b981" />
+  <meta name="theme-color" content="#f6f5f1" />
   <meta name="mobile-web-app-capable" content="true" />
   <meta name="application-name" content="TrailNav" />
-  <meta name="msapplication-TileColor" content="#10b981" />
+  <meta name="msapplication-TileColor" content="#3f6b52" />
 
   <!-- Descriptive metadata -->
-  <meta name="description" content="Offline GPS navigation for hiking and trail running with GPX support" />
-  <meta name="keywords" content="hiking, hiking app, GPS, offline maps, trail, navigation, GPX" />
+  <meta name="description" content="Navegación GPS offline para rutas de montaña y trail con archivos GPX" />
+  <meta name="keywords" content="senderismo, GPS, mapas offline, trail, navegación, GPX" />
   <meta name="author" content="TrailNav" />
 
   <!-- Icons for all platforms -->
@@ -26,16 +26,17 @@
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="manifest" href="/manifest.webmanifest" />
 
-  <title>TrailNav - Offline Trail Navigation</title>
+  <title>TrailNav · Navegación de montaña sin cobertura</title>
 
   <!-- Performance optimizations -->
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="color-scheme" content="dark light" />
+  <meta name="color-scheme" content="light" />
   <meta name="format-detection" content="telephone=no" />
   <style>
     html {
-      font-size: clamp(14px, 2vw, 16px);
+      font-size: clamp(15px, 2vw, 17px);
       height: 100%;
+      background: #f6f5f1;
     }
 
     body {
@@ -52,7 +53,7 @@
 </head>
 
 <body>
-  <noscript>TrailNav requires JavaScript enabled to run. Please enable JavaScript in your browser settings.</noscript>
+  <noscript>TrailNav necesita JavaScript para funcionar. Actívalo en los ajustes del navegador.</noscript>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

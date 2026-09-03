@@ -8,30 +8,51 @@ export interface Route {
   elevationLoss: number;
   maxElevation: number;
   minElevation: number;
-  gpxData: string; // The raw GPX string
-  geoJson: any; // Parsed GeoJSON
+  gpxData: string;
+  geoJson: any;
   createdAt: number;
 }
+
+export type MapStyleId = 'topo' | 'satellite';
 
 export interface MapRegion {
   id: string;
   name: string;
-  bounds: [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
+  /** [minLng, minLat, maxLng, maxLat] */
+  bounds: [number, number, number, number];
+  style: MapStyleId;
   minZoom: number;
   maxZoom: number;
+  tileCount: number;
+  /** Bytes realmente almacenados en IndexedDB. */
   sizeBytes: number;
   createdAt: number;
 }
 
+export interface StoredTile {
+  key: string;
+  regionId: string;
+  blob: Blob;
+  size: number;
+}
+
 export interface Settings {
   id: string;
-  units: 'metric' | 'imperial';
   deviationWarningDistance: number;
-  autoZoom: boolean;
-  mapRotation: boolean;
-  gpsAccuracy: 'high' | 'balanced' | 'low';
+  keepMapNorthUp: boolean;
+  mapStyle: MapStyleId;
   screenAlwaysOn: boolean;
+  vibrationAlerts: boolean;
 }
+
+export const DEFAULT_SETTINGS: Settings = {
+  id: 'user-settings',
+  deviationWarningDistance: 30,
+  keepMapNorthUp: false,
+  mapStyle: 'topo',
+  screenAlwaysOn: true,
+  vibrationAlerts: true,
+};
 
 interface TrailNavDB extends DBSchema {
   routes: {
@@ -44,25 +65,35 @@ interface TrailNavDB extends DBSchema {
     value: MapRegion;
     indexes: { 'by-date': number };
   };
+  tiles: {
+    key: string;
+    value: StoredTile;
+    indexes: { 'by-region': string };
+  };
   settings: {
     key: string;
     value: Settings;
   };
 }
 
-let dbPromise: Promise<IDBPDatabase<TrailNavDB>>;
+let dbPromise: Promise<IDBPDatabase<TrailNavDB>> | null = null;
 
-export async function getDB() {
+export function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<TrailNavDB>('trailnav-db', 1, {
-      upgrade(db) {
+    dbPromise = openDB<TrailNavDB>('trailnav-db', 2, {
+      upgrade(db, oldVersion) {
         if (!db.objectStoreNames.contains('routes')) {
-          const routeStore = db.createObjectStore('routes', { keyPath: 'id' });
-          routeStore.createIndex('by-date', 'createdAt');
+          db.createObjectStore('routes', { keyPath: 'id' }).createIndex('by-date', 'createdAt');
+        }
+        if (oldVersion < 2 && db.objectStoreNames.contains('maps')) {
+          // La versión 1 no guardaba teselas: cualquier región previa era un registro vacío.
+          db.deleteObjectStore('maps');
         }
         if (!db.objectStoreNames.contains('maps')) {
-          const mapStore = db.createObjectStore('maps', { keyPath: 'id' });
-          mapStore.createIndex('by-date', 'createdAt');
+          db.createObjectStore('maps', { keyPath: 'id' }).createIndex('by-date', 'createdAt');
+        }
+        if (!db.objectStoreNames.contains('tiles')) {
+          db.createObjectStore('tiles', { keyPath: 'key' }).createIndex('by-region', 'regionId');
         }
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'id' });
@@ -75,20 +106,10 @@ export async function getDB() {
 
 export async function getSettings(): Promise<Settings> {
   const db = await getDB();
-  const settings = await db.get('settings', 'user-settings');
-  if (settings) return settings;
-  
-  const defaultSettings: Settings = {
-    id: 'user-settings',
-    units: 'metric',
-    deviationWarningDistance: 25,
-    autoZoom: true,
-    mapRotation: true,
-    gpsAccuracy: 'high',
-    screenAlwaysOn: true,
-  };
-  await db.put('settings', defaultSettings);
-  return defaultSettings;
+  const stored = await db.get('settings', DEFAULT_SETTINGS.id);
+  if (stored) return { ...DEFAULT_SETTINGS, ...stored, id: DEFAULT_SETTINGS.id };
+  await db.put('settings', DEFAULT_SETTINGS);
+  return DEFAULT_SETTINGS;
 }
 
 export async function saveSettings(settings: Settings) {
@@ -103,7 +124,8 @@ export async function saveRoute(route: Route) {
 
 export async function getRoutes(): Promise<Route[]> {
   const db = await getDB();
-  return db.getAllFromIndex('routes', 'by-date');
+  const routes = await db.getAllFromIndex('routes', 'by-date');
+  return routes.reverse();
 }
 
 export async function getRoute(id: string): Promise<Route | undefined> {

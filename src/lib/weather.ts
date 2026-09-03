@@ -1,5 +1,5 @@
 import { Route } from './db';
-import { getRouteCoordinates } from './routeAnalysis';
+import { getRouteCoordinates } from './routeProfile';
 
 export interface RouteWeatherSample {
     label: string;
@@ -40,12 +40,12 @@ export async function getRouteWeather(route: Route, etaMinutes: number, forceRef
     }
 
     const coordinates = getRouteCoordinates(route);
-    if (coordinates.length === 0) throw new Error('La ruta no contiene coordenadas validas');
+    if (coordinates.length === 0) throw new Error('La ruta no contiene coordenadas válidas');
 
     const sampleDefinitions = [
         { ratio: 0, label: 'Inicio' },
-        { ratio: 0.5, label: 'Mitad de ruta' },
-        { ratio: 1, label: 'Final' },
+        { ratio: 0.5, label: 'Mitad' },
+        { ratio: 1, label: 'Meta' },
     ];
 
     try {
@@ -60,12 +60,20 @@ export async function getRouteWeather(route: Route, etaMinutes: number, forceRef
                 timezone: 'auto',
             });
             const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
-            if (!response.ok) throw new Error('Open-Meteo no esta disponible');
+            if (!response.ok) throw new Error('Open-Meteo no está disponible');
             const data = await response.json();
-            const targetHour = new Date(arrivalTime).getHours();
-            const targetDay = new Date(arrivalTime).toISOString().slice(0, 10);
-            let index = data.hourly.time.findIndex((time: string) => time.startsWith(targetDay) && new Date(time).getHours() === targetHour);
-            if (index < 0) index = 0;
+
+            // Las horas llegan en hora local del punto; se busca la más próxima a la llegada estimada.
+            const times: string[] = data.hourly.time;
+            let index = 0;
+            let bestDelta = Infinity;
+            times.forEach((time, position) => {
+                const delta = Math.abs(new Date(time).getTime() - arrivalTime);
+                if (delta < bestDelta) {
+                    bestDelta = delta;
+                    index = position;
+                }
+            });
 
             return {
                 label,

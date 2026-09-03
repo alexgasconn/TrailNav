@@ -1,4 +1,7 @@
 import * as turf from '@turf/turf';
+import { getRouteCoordinates } from './routeProfile';
+
+export { getRouteCoordinates };
 
 export type RouteTrend = 'ascent' | 'descent';
 
@@ -33,17 +36,6 @@ const MIN_SEGMENT_DISTANCE = 200;
 const MIN_ELEVATION_CHANGE = 25;
 const SLOPE_THRESHOLD = 1;
 const SMOOTHING_RADIUS = 2;
-
-export function getRouteCoordinates(route: { geoJson?: any }): number[][] {
-    const feature = route.geoJson?.features?.find(
-        (item: any) => item.geometry?.type === 'LineString' || item.geometry?.type === 'MultiLineString'
-    );
-
-    if (!feature) return [];
-    return feature.geometry.type === 'LineString'
-        ? feature.geometry.coordinates
-        : feature.geometry.coordinates[0] || [];
-}
 
 function smoothElevations(elevations: number[]): number[] {
     return elevations.map((_, index) => {

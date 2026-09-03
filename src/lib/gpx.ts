@@ -1,72 +1,38 @@
 import { gpx } from '@tmcw/togeojson';
 import { DOMParser } from '@xmldom/xmldom';
-import * as turf from '@turf/turf';
 import { Route } from './db';
+import { buildRouteProfile } from './routeProfile';
 
 export async function parseGPX(file: File): Promise<Route> {
   const text = await file.text();
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, 'text/xml');
-  const geojson = gpx(doc);
+  const geojson = gpx(doc as any);
 
-  let distance = 0;
-  let elevationGain = 0;
-  let elevationLoss = 0;
-  let maxElevation = -Infinity;
-  let minElevation = Infinity;
-
-  // Find the first LineString or MultiLineString
-  let lineStringFeature = geojson.features.find(
-    (f) => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString'
+  const trackFeature = geojson.features.find(
+    (feature: any) => feature.geometry?.type === 'LineString' || feature.geometry?.type === 'MultiLineString'
   );
 
-  if (!lineStringFeature) {
-    throw new Error('No valid track found in GPX file');
+  if (!trackFeature) {
+    throw new Error('El archivo no contiene ningún track válido');
   }
 
-  const coordinates = lineStringFeature.geometry.type === 'LineString'
-    ? (lineStringFeature.geometry as any).coordinates
-    : (lineStringFeature.geometry as any).coordinates[0]; // Take first track if multi
-
-  if (!coordinates || coordinates.length === 0) {
-    throw new Error('No coordinates found in track');
+  // Los desniveles se calculan con el mismo filtro que usa el resto de la aplicación.
+  const profile = buildRouteProfile({ geoJson: geojson });
+  if (profile.coordinates.length < 2) {
+    throw new Error('El track no contiene suficientes puntos');
   }
 
-  // Calculate stats
-  for (let i = 0; i < coordinates.length; i++) {
-    const coord = coordinates[i];
-    const ele = coord[2] || 0; // Elevation is usually the 3rd element
-
-    if (ele > maxElevation) maxElevation = ele;
-    if (ele < minElevation) minElevation = ele;
-
-    if (i > 0) {
-      const prevCoord = coordinates[i - 1];
-      const prevEle = prevCoord[2] || 0;
-      
-      const eleDiff = ele - prevEle;
-      if (eleDiff > 0) {
-        elevationGain += eleDiff;
-      } else {
-        elevationLoss += Math.abs(eleDiff);
-      }
-    }
-  }
-
-  // Calculate distance using turf
-  const line = turf.lineString(coordinates);
-  distance = turf.length(line, { units: 'kilometers' }) * 1000; // Convert to meters
-
-  const name = lineStringFeature.properties?.name || file.name.replace('.gpx', '');
+  const name = String(trackFeature.properties?.name ?? '').trim() || file.name.replace(/\.gpx$/i, '');
 
   return {
     id: crypto.randomUUID(),
     name,
-    distance,
-    elevationGain,
-    elevationLoss,
-    maxElevation: maxElevation === -Infinity ? 0 : maxElevation,
-    minElevation: minElevation === Infinity ? 0 : minElevation,
+    distance: profile.totalDistance,
+    elevationGain: profile.totalAscent,
+    elevationLoss: profile.totalDescent,
+    maxElevation: profile.maxElevation,
+    minElevation: profile.minElevation,
     gpxData: text,
     geoJson: geojson,
     createdAt: Date.now(),
