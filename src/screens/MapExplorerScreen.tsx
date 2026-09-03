@@ -91,15 +91,24 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
             if (route?.geoJson) {
                 map.fitBounds(turf.bbox(route.geoJson) as [number, number, number, number], { padding: 60, duration: 0 });
             }
-            // Ensure canvas is correctly sized (fix clipped map render on some devices)
+            // Ensure the container has explicit full-viewport sizing and canvas is correctly sized.
+            try {
+                if (containerRef.current) {
+                    containerRef.current.style.width = '100%';
+                    containerRef.current.style.minHeight = '100dvh';
+                    containerRef.current.style.height = '100dvh';
+                }
+            } catch {}
+
             try {
                 map.resize();
             } catch {}
             const later = window.setTimeout(() => {
                 try {
                     map.resize();
+                    map.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
                 } catch {}
-            }, 200);
+            }, 250);
 
             const onWindowResize = () => {
                 try {
@@ -113,6 +122,38 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                 window.removeEventListener('orientationchange', onWindowResize);
                 window.clearTimeout(later);
             });
+
+            // Optional debug overlay for mobile diagnostics
+            try {
+                if ((window as any).__TRAILNAV_DEBUG_MAP) {
+                    const dbg = document.createElement('div');
+                    dbg.style.position = 'fixed';
+                    dbg.style.left = '8px';
+                    dbg.style.top = '8px';
+                    dbg.style.zIndex = '99999';
+                    dbg.style.background = 'rgba(0,0,0,0.6)';
+                    dbg.style.color = 'white';
+                    dbg.style.padding = '6px 8px';
+                    dbg.style.fontSize = '12px';
+                    dbg.style.borderRadius = '8px';
+                    dbg.innerText = 'map-debug';
+                    document.body.appendChild(dbg);
+                    const updateDbg = () => {
+                        try {
+                            const crect = containerRef.current?.getBoundingClientRect();
+                            const canvas = map.getContainer().querySelector('canvas');
+                            const crectC = canvas ? canvas.getBoundingClientRect() : null;
+                            dbg.innerText = `container: ${crect?.width?.toFixed(0)}x${crect?.height?.toFixed(0)}\ncanvas: ${crectC?.width?.toFixed(0)}x${crectC?.height?.toFixed(0)}\nscrollY:${window.scrollY}`;
+                        } catch {}
+                    };
+                    updateDbg();
+                    const dbgI = window.setInterval(updateDbg, 500);
+                    setTimeout(() => {
+                        window.clearInterval(dbgI);
+                        dbg.remove();
+                    }, 15000);
+                }
+            } catch {}
         });
 
         return () => {

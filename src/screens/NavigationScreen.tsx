@@ -116,6 +116,16 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     .setLngLat(profile.coordinates[0] ?? [0, 40])
                     .addTo(map);
 
+                // Ensure the container has explicit full-viewport sizing to avoid
+                // parent-height collapse on some mobile browsers.
+                try {
+                    if (containerRef.current) {
+                        containerRef.current.style.width = '100%';
+                        containerRef.current.style.minHeight = '100dvh';
+                        containerRef.current.style.height = '100dvh';
+                    }
+                } catch {}
+
                 // Force a resize after load and again shortly after to ensure the canvas
                 // fills the container (fixes cases where only the lower part is visible).
                 const safeResize = () => {
@@ -126,7 +136,13 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     }
                 };
                 safeResize();
-                const later = window.setTimeout(safeResize, 200);
+                const later = window.setTimeout(() => {
+                    safeResize();
+                    // also nudge map to redraw at the current center/zoom
+                    try {
+                        map.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
+                    } catch {}
+                }, 250);
 
                 setMapReady(true);
 
@@ -146,6 +162,39 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
 
                 // attach to local scope so cleanup in effect return can clear
                 (map as any).__trailnav_clearLater = clearLater;
+
+                // Debug overlay to help diagnose clipped map issues on mobile devices.
+                // Visible only while `window.__TRAILNAV_DEBUG_MAP` is true.
+                try {
+                    if ((window as any).__TRAILNAV_DEBUG_MAP) {
+                        const dbg = document.createElement('div');
+                        dbg.style.position = 'fixed';
+                        dbg.style.left = '8px';
+                        dbg.style.top = '8px';
+                        dbg.style.zIndex = '99999';
+                        dbg.style.background = 'rgba(0,0,0,0.6)';
+                        dbg.style.color = 'white';
+                        dbg.style.padding = '6px 8px';
+                        dbg.style.fontSize = '12px';
+                        dbg.style.borderRadius = '8px';
+                        dbg.innerText = 'map-debug';
+                        document.body.appendChild(dbg);
+                        const updateDbg = () => {
+                            try {
+                                const crect = containerRef.current?.getBoundingClientRect();
+                                const canvas = map.getContainer().querySelector('canvas');
+                                const crectC = canvas ? canvas.getBoundingClientRect() : null;
+                                dbg.innerText = `container: ${crect?.width?.toFixed(0)}x${crect?.height?.toFixed(0)}\ncanvas: ${crectC?.width?.toFixed(0)}x${crectC?.height?.toFixed(0)}\nscrollY:${window.scrollY}`;
+                            } catch {}
+                        };
+                        updateDbg();
+                        const dbgI = window.setInterval(updateDbg, 500);
+                        setTimeout(() => {
+                            window.clearInterval(dbgI);
+                            dbg.remove();
+                        }, 15000);
+                    }
+                } catch {}
             });
         });
 
