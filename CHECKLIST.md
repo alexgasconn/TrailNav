@@ -141,6 +141,8 @@
 - [x] Documentación completa escrita
 - [x] Motor local de analisis de elevacion y deteccion de segmentos
 - [x] ETA multimodelo con filtro mediana/MAD
+- [x] Track coloreado por pendiente en Map Explorer
+- [x] Map matching para distancia restante durante navegacion
 
 ### 📝 Pendiente (Opcional)
 

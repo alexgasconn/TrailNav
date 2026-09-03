@@ -4,13 +4,14 @@ import { Route } from '../lib/db';
 import { Screen } from '../App';
 import * as turf from '@turf/turf';
 import { analyzeRoute, TerrainSegment } from '../lib/routeAnalysis';
+import { estimateRouteTime } from '../lib/eta';
 
 export function RouteAnalysisScreen({ route, onNavigate }: { route: Route, onNavigate: (s: Screen, r?: Route) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const analysis = analyzeRoute(route);
 
-  // Estimate duration (Naismith's rule: 5km/h + 1min per 10m ascent)
-  const estimatedMinutes = (route.distance / 1000 / 5) * 60 + (route.elevationGain / 10);
+  const eta = estimateRouteTime(route.distance, analysis);
+  const estimatedMinutes = eta.minutes;
   const hours = Math.floor(estimatedMinutes / 60);
   const minutes = Math.round(estimatedMinutes % 60);
 
@@ -86,19 +87,32 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route, onNav
           <ArrowLeft size={24} />
         </button>
         <h1 className="text-xl font-bold text-zinc-100 truncate flex-1">{route.name}</h1>
-        import {estimateRouteTime} from '../lib/eta';
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-3">
-          const eta = estimateRouteTime(route.distance, analysis);
-          const estimatedMinutes = eta.minutes;
+          <StatCard icon={<MapIcon size={18} />} label="Distance" value={`${(route.distance / 1000).toFixed(2)} km`} />
+          <StatCard icon={<Clock size={18} />} label="Est. Time" value={`${hours}h ${minutes}m`} />
           <StatCard icon={<ArrowUpRight size={18} className="text-emerald-500" />} label="Elevation Gain" value={`${Math.round(route.elevationGain)} m`} />
           <StatCard icon={<ArrowDownRight size={18} className="text-red-500" />} label="Elevation Loss" value={`${Math.round(route.elevationLoss)} m`} />
           <StatCard icon={<Mountain size={18} />} label="Max Elevation" value={`${Math.round(route.maxElevation)} m`} />
           <StatCard icon={<Mountain size={18} className="rotate-180" />} label="Min Elevation" value={`${Math.round(route.minElevation)} m`} />
         </div>
+
+        <section className="bg-emerald-950/30 border border-emerald-900/60 rounded-3xl p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-emerald-400 font-semibold">Multi-model ETA</p>
+              <p className="text-3xl font-bold text-zinc-100 mt-1">{formatDuration(eta.minutes)}</p>
+              <p className="text-xs text-zinc-400 mt-1">Consensus range: {formatDuration(eta.range[0])} - {formatDuration(eta.range[1])}</p>
+            </div>
+            <div className="text-right text-xs text-zinc-500">
+              <p>{eta.accepted.length}/{eta.estimates.length} models accepted</p>
+              <p className="mt-1">MAD outlier filter</p>
+            </div>
+          </div>
+        </section>
 
         {/* Elevation Profile */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
@@ -160,6 +174,12 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route, onNav
       </div>
     </div>
   );
+}
+
+function formatDuration(totalMinutes: number) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
 function SegmentCard({ segment, index }: { segment: TerrainSegment, index: number }) {

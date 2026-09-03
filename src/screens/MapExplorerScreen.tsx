@@ -5,6 +5,7 @@ import { ArrowLeft, Layers, LocateFixed } from 'lucide-react';
 import { Route } from '../lib/db';
 import { Screen } from '../App';
 import * as turf from '@turf/turf';
+import { analyzeRoute, getRouteCoordinates, TerrainSegment } from '../lib/routeAnalysis';
 
 export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, onNavigate: (s: Screen, r?: Route) => void }) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -83,6 +84,9 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
 
     if (mapInstance.getLayer('route-core')) mapInstance.removeLayer('route-core');
     if (mapInstance.getLayer('route-casing')) mapInstance.removeLayer('route-casing');
+    for (let index = 0; mapInstance.getLayer(`route-segment-${index}`); index += 1) {
+      mapInstance.removeLayer(`route-segment-${index}`);
+    }
     if (mapInstance.getSource('route')) mapInstance.removeSource('route');
 
     mapInstance.addSource('route', {
@@ -117,6 +121,27 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
         'line-color': '#10b981',
         'line-width': 4
       }
+    });
+
+    const coordinates = getRouteCoordinates(route);
+    const analysis = analyzeRoute(route);
+    if (coordinates.length < 2 || analysis.segments.length === 0) return;
+
+    const routeLine = turf.lineString(coordinates.map((coordinate) => coordinate.slice(0, 2)));
+    analysis.segments.forEach((segment, index) => {
+      const segmentLine = turf.lineSliceAlong(routeLine, segment.startDistance / 1000, segment.endDistance / 1000);
+      mapInstance.addSource(`route-segment-${index}`, { type: 'geojson', data: segmentLine });
+      mapInstance.addLayer({
+        id: `route-segment-${index}`,
+        type: 'line',
+        source: `route-segment-${index}`,
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': segmentColor(segment),
+          'line-width': 4,
+          'line-opacity': 0.98,
+        },
+      });
     });
   };
 
@@ -334,4 +359,17 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null, 
       )}
     </div>
   );
+}
+
+function segmentColor(segment: TerrainSegment) {
+  if (segment.trend === 'descent') {
+    if (segment.averageSlope <= -25) return '#172554';
+    if (segment.averageSlope <= -15) return '#1d4ed8';
+    return '#60a5fa';
+  }
+  if (segment.averageSlope > 25) return '#7f1d1d';
+  if (segment.averageSlope > 15) return '#dc2626';
+  if (segment.averageSlope > 9) return '#f97316';
+  if (segment.averageSlope > 4) return '#facc15';
+  return '#22c55e';
 }

@@ -6,6 +6,7 @@ import { Route } from '../lib/db';
 import { Screen } from '../App';
 import * as turf from '@turf/turf';
 import { useVibration } from '../hooks';
+import { matchPosition } from '../lib/mapMatching';
 
 export function NavigationScreen({ route, onNavigate }: { route: Route, onNavigate: (s: Screen, r?: Route) => void }) {
     const mapContainer = useRef<HTMLDivElement>(null);
@@ -200,8 +201,10 @@ export function NavigationScreen({ route, onNavigate }: { route: Route, onNaviga
                         map.current?.setPaintProperty('route-core', 'line-color', '#10b981');
                     }
 
-                    const endPt = turf.point(coords[coords.length - 1]);
-                    setDistanceToFinish(turf.distance(userPt, endPt, { units: 'kilometers' }) * 1000);
+                    const matched = matchPosition(r, [lng, lat]);
+                    if (matched) {
+                        setDistanceToFinish(Math.max(0, r.distance - matched.distanceAlongRoute));
+                    }
                 }
             },
             (err) => { console.error('GPS error:', err); },

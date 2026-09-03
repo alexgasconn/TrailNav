@@ -34,7 +34,7 @@ const MIN_ELEVATION_CHANGE = 25;
 const SLOPE_THRESHOLD = 1;
 const SMOOTHING_RADIUS = 2;
 
-function getCoordinates(route: { geoJson?: any }): number[][] {
+export function getRouteCoordinates(route: { geoJson?: any }): number[][] {
     const feature = route.geoJson?.features?.find(
         (item: any) => item.geometry?.type === 'LineString' || item.geometry?.type === 'MultiLineString'
     );
@@ -55,7 +55,7 @@ function smoothElevations(elevations: number[]): number[] {
 }
 
 export function analyzeRoute(route: { geoJson?: any; distance: number }): RouteAnalysis {
-    const coordinates = getCoordinates(route);
+    const coordinates = getRouteCoordinates(route);
     if (coordinates.length === 0) {
         return { points: [], segments: [], totalAscent: 0, totalDescent: 0, highestPoint: { distance: 0, elevation: 0, slope: 0 }, lowestPoint: { distance: 0, elevation: 0, slope: 0 } };
     }
