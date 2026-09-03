@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
-import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Satellite } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Satellite, Eye, EyeOff } from 'lucide-react';
 import { Screen } from '../App';
 import { Route, getSettings } from '../lib/db';
 import { SessionMetrics, useNavigationSession } from '../state/navigationSession';
@@ -58,6 +58,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     const [rotateWithHeading, setRotateWithHeading] = useState(true);
     const [confirmFinish, setConfirmFinish] = useState(false);
     const [slopeWindowMeters, setSlopeWindowMeters] = useState(200);
+    const [showPanels, setShowPanels] = useState(true);
 
     const profile = useMemo(() => getRouteProfile(route), [route]);
     const routePoints = useMemo(() => getRoutePoints(route), [route]);
@@ -245,6 +246,12 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
         }
     }, [position, heading, course, following, rotateWithHeading, mapReady]);
 
+    useEffect(() => {
+        try {
+            mapRef.current?.resize();
+        } catch { }
+    }, [showPanels]);
+
     // Traza ya recorrida sobre la ruta.
     useEffect(() => {
         const map = mapRef.current;
@@ -298,6 +305,13 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     >
                         <Compass size={22} />
                     </button>
+                    <button
+                        onClick={() => setShowPanels((v) => !v)}
+                        className={`pointer-events-auto touch-target grid place-items-center rounded-xl border shadow-sm ${showPanels ? 'bg-surface/95 border-line text-ink' : 'bg-surface/95 border-line text-ink'}`}
+                        aria-label={showPanels ? 'Ocultar paneles' : 'Mostrar paneles'}
+                    >
+                        {showPanels ? <Eye size={22} /> : <EyeOff size={22} />}
+                    </button>
                 </div>
 
                 <div className="h-1 mx-3 rounded-full bg-line overflow-hidden">
@@ -342,9 +356,11 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 )}
 
                 <div className="bg-surface-soft/95 backdrop-blur border-t border-line pt-3 pb-3">
-                    <div className="px-4 pb-2">
-                        <MetricPanels panels={panels} />
-                    </div>
+                    {showPanels && (
+                        <div className="px-4 pb-2">
+                            <MetricPanels panels={panels} />
+                        </div>
+                    )}
 
                     <div className="flex gap-2 px-4 pt-4">
                         <button
