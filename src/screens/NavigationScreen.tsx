@@ -58,6 +58,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     const [following, setFollowing] = useState(true);
     const [rotateWithHeading, setRotateWithHeading] = useState(true);
     const [confirmFinish, setConfirmFinish] = useState(false);
+    const [slopeWindowMeters, setSlopeWindowMeters] = useState(200);
 
     const profile = useMemo(() => getRouteProfile(route), [route]);
     const routePoints = useMemo(() => getRoutePoints(route), [route]);
@@ -344,9 +345,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 <div className="bg-surface-soft/95 backdrop-blur border-t border-line pt-3 pb-3">
                     {/* Info windows: profile, weather, and slope details (swipable) */}
                     <div className="px-4 pb-2">
-                        <InfoWindows
-                            windows={buildInfoWindows(profile, route, metrics)}
-                        />
+                            <InfoWindows windows={buildInfoWindows(profile, route, metrics, slopeWindowMeters, setSlopeWindowMeters)} />
                     </div>
                     <MetricPanels panels={panels} />
 
@@ -460,7 +459,13 @@ function buildPanels(metrics: SessionMetrics | null) {
     ];
 }
 
-function buildInfoWindows(profile: ReturnType<typeof getRouteProfile>, route: Route, metrics: SessionMetrics | null) {
+function buildInfoWindows(
+    profile: ReturnType<typeof getRouteProfile>,
+    route: Route,
+    metrics: SessionMetrics | null,
+    windowMeters: number,
+    setWindowMeters: (v: number) => void
+) {
     const windows: { id: string; title: string; content: React.ReactNode }[] = [];
 
     // Profile window
@@ -485,7 +490,6 @@ function buildInfoWindows(profile: ReturnType<typeof getRouteProfile>, route: Ro
     // Slope / ascent-descent detail window
     if (profile.hasElevation && metrics) {
         const center = Math.max(0, Math.min(profile.totalDistance, metrics.distanceDone || 0));
-        const windowMeters = 200; // sample window around user in meters
         const start = Math.max(0, center - windowMeters / 2);
         const end = Math.min(profile.totalDistance, start + windowMeters);
 
@@ -510,8 +514,23 @@ function buildInfoWindows(profile: ReturnType<typeof getRouteProfile>, route: Ro
 
         const content = (
             <section className="bg-surface border border-line rounded-2xl p-4">
-                <p className="text-sm font-semibold text-ink mb-2">{direction}</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-ink">{direction}</p>
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs text-ink-faint">Ventana (m)</label>
+                        <input
+                            type="number"
+                            value={windowMeters}
+                            onChange={(e) => {
+                                const v = Number(e.target.value) || 0;
+                                setWindowMeters(Math.max(50, Math.min(5000, v)));
+                            }}
+                            className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm"
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mt-3">
                     <div className="bg-canvas border border-line rounded-xl p-3">
                         <p className="text-[11px] text-ink-faint">% medio</p>
                         <p className="text-xl font-semibold tabular mt-1">{formatPercent(avgSlope)}</p>

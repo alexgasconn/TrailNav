@@ -13,6 +13,8 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
     const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
     const [startTime, setStartTime] = useState<string>(() => new Date().toTimeString().slice(0, 5));
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const [visible, setVisible] = useState<Record<string, boolean>>({});
+    const [hours, setHours] = useState<number>(48);
 
     useEffect(() => {
         let cancelled = false;
@@ -21,7 +23,12 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
         const startTimestamp = Date.parse(`${startDate}T${startTime}`);
         getRouteWeather(route, etaMinutes, startTimestamp)
             .then((result) => {
-                if (!cancelled) setTimeline(result);
+                if (!cancelled) {
+                    setTimeline(result);
+                    const vis: Record<string, boolean> = {};
+                    result.samples.forEach((s) => (vis[s.label] = true));
+                    setVisible(vis);
+                }
             })
             .catch(() => {
                 if (!cancelled) setError(ERROR_MESSAGE);
@@ -39,9 +46,25 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
         setError(null);
         const startTimestamp = Date.parse(`${startDate}T${startTime}`);
         getRouteWeather(route, etaMinutes, startTimestamp, true)
-            .then(setTimeline)
+            .then((result) => {
+                setTimeline(result);
+                const vis: Record<string, boolean> = {};
+                result.samples.forEach((s) => (vis[s.label] = true));
+                setVisible(vis);
+            })
             .catch(() => setError(ERROR_MESSAGE))
             .finally(() => setLoading(false));
+    };
+
+    const exportTimeline = () => {
+        if (!timeline) return;
+        const blob = new Blob([JSON.stringify(timeline, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `trailnav-weather-${route.id}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     // draw simple chart of temperature and precipitation using hourly arrays
@@ -63,9 +86,22 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
         ctx.scale(ratio, ratio);
         ctx.clearRect(0, 0, width, height);
 
-        // time range from first series
-        const t0 = series[0].time[0];
-        const t1 = series[0].time[series[0].time.length - 1];
+        // full time range across series
+        let t0 = Infinity;
+        let t1 = -Infinity;
+        series.forEach((s) => {
+            if (s.time.length > 0) {
+                t0 = Math.min(t0, s.time[0]);
+                t1 = Math.max(t1, s.time[s.time.length - 1]);
+            }
+        });
+
+        const startTimestamp = Date.parse(`${startDate}T${startTime}`);
+        const clipEnd = startTimestamp + hours * 3600000;
+        // clamp to requested hours window
+        t0 = Math.max(t0, startTimestamp);
+        t1 = Math.min(t1, clipEnd);
+        if (t0 >= t1) return;
 
         // temperature range
         let tmin = Infinity;
@@ -83,26 +119,34 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
         const toYTemp = (temp: number) => padding + (1 - (temp - tmin) / Math.max(1, tmax - tmin)) * (height - padding * 2);
         const precipBarHeight = 40;
 
-        // draw precipitation bars for first series as baseline (light)
-        const base = series[0];
-        ctx.fillStyle = 'rgba(59,130,246,0.12)';
-        const barW = Math.max(2, (width - padding * 2) / base.time.length - 2);
-        for (let i = 0; i < base.time.length; i += 1) {
-            const x = toX(base.time[i]);
-            const h = (base.precipitationProbability[i] / Math.max(1, pmax)) * precipBarHeight;
-            ctx.fillRect(x - barW / 2, height - padding - h, barW, h);
-        }
+        // draw precipitation bars for visible series (overlay, light)
+        const colors = ['#ef4444', '#f59e0b', '#10b981'];
+        series.forEach((s, si) => {
+            const label = timeline.samples[si]?.label ?? String(si);
+            if (!visible[label]) return;
+            ctx.fillStyle = 'rgba(59,130,246,0.12)';
+            const filtered = s.time.map((t, i) => ({ t, p: s.precipitationProbability[i] })).filter(({ t }) => t >= t0 && t <= t1);
+            const barW = Math.max(2, (width - padding * 2) / Math.max(1, filtered.length) - 2);
+            filtered.forEach((pt) => {
+                const x = toX(pt.t);
+                const h = (pt.p / Math.max(1, pmax)) * precipBarHeight;
+                ctx.fillRect(x - barW / 2, height - padding - h, barW, h);
+            });
+        });
 
         // draw temperature lines (one per series, first highlighted)
         series.forEach((s, si) => {
+            const label = timeline.samples[si]?.label ?? String(si);
+            if (!visible[label]) return;
             ctx.beginPath();
-            for (let i = 0; i < s.time.length; i += 1) {
-                const x = toX(s.time[i]);
-                const y = toYTemp(s.temperature[i]);
+            const filtered = s.time.map((t, i) => ({ t, temp: s.temperature[i] })).filter(({ t }) => t >= t0 && t <= t1);
+            filtered.forEach((pt, i) => {
+                const x = toX(pt.t);
+                const y = toYTemp(pt.temp);
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
-            }
-            ctx.strokeStyle = si === 0 ? '#b91c1c' : 'rgba(185,28,28,0.35)';
+            });
+            ctx.strokeStyle = colors[si % colors.length];
             ctx.lineWidth = si === 0 ? 2 : 1;
             ctx.stroke();
         });
@@ -159,7 +203,27 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
                     <div className="mb-3">
                         <canvas ref={canvasRef} className="w-full rounded-xl bg-canvas" style={{ height: 140 }} />
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="flex gap-1">
+                                    {timeline.samples.map((s) => (
+                                        <button
+                                            key={s.label}
+                                            onClick={() => setVisible((v) => ({ ...v, [s.label]: !v[s.label] }))}
+                                            className={`px-2 py-1 rounded-md text-sm border ${visible[s.label] ? 'bg-moss text-white border-moss' : 'bg-surface border-line text-ink'}`}
+                                        >
+                                            {s.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="ml-auto flex items-center gap-2">
+                                    <label className="text-xs text-ink-faint">Horas</label>
+                                    <input type="number" value={hours} onChange={(e) => setHours(Number(e.target.value) || 1)} className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm" />
+                                    <button onClick={exportTimeline} className="h-8 px-3 rounded-xl bg-surface border border-line text-ink text-sm">Guardar</button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
                         {timeline.samples.map((sample) => (
                             <article key={sample.label} className="bg-canvas border border-line rounded-xl p-3 min-w-0">
                                 <p className="text-[10px] uppercase tracking-wide text-ink-faint truncate">{sample.label}</p>
