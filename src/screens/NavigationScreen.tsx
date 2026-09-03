@@ -29,7 +29,6 @@ import {
     formatTimeOfDay,
 } from '../lib/format';
 import ProfileChart from '../components/ProfileChart';
-import InfoWindows from '../components/InfoWindows';
 import { RouteWeatherPanel } from '../components/RouteWeatherPanel';
 import { sampleProfile, indexAtDistance } from '../lib/routeProfile';
 
@@ -269,7 +268,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
         setRouteAlertState(map, Boolean(metrics?.offRoute));
     }, [metrics?.offRoute, mapReady]);
 
-    const panels = useMemo(() => buildPanels(metrics), [metrics]);
+    const panels = useMemo(() => buildPanels(metrics, profile, route, slopeWindowMeters, setSlopeWindowMeters), [metrics, profile, route, slopeWindowMeters]);
 
     return (
         <div className="w-full h-full relative overflow-hidden bg-canvas">
@@ -343,11 +342,9 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 )}
 
                 <div className="bg-surface-soft/95 backdrop-blur border-t border-line pt-3 pb-3">
-                    {/* Info windows: profile, weather, and slope details (swipable) */}
                     <div className="px-4 pb-2">
-                        <InfoWindows windows={buildInfoWindows(profile, route, metrics, slopeWindowMeters, setSlopeWindowMeters)} />
+                        <MetricPanels panels={panels} />
                     </div>
-                    <MetricPanels panels={panels} />
 
                     <div className="flex gap-2 px-4 pt-4">
                         <button
@@ -398,10 +395,10 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     );
 }
 
-function buildPanels(metrics: SessionMetrics | null) {
+function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof getRouteProfile>, route: Route, windowMeters: number, setWindowMeters: (v: number) => void) {
     if (!metrics) return [];
 
-    return [
+    const base = [
         {
             id: 'progress',
             title: 'Progreso',
@@ -457,6 +454,11 @@ function buildPanels(metrics: SessionMetrics | null) {
             ],
         },
     ];
+
+    // append info windows (profile, weather, slope) as panels with content
+    const info = buildInfoWindows(profile, route, metrics, windowMeters, setWindowMeters).map((w) => ({ id: w.id, title: w.title, content: w.content }));
+
+    return [...base, ...info];
 }
 
 function buildInfoWindows(

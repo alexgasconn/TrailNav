@@ -10,7 +10,8 @@ export interface MetricItem {
 export interface MetricPanel {
     id: string;
     title: string;
-    items: MetricItem[];
+    items?: MetricItem[];
+    content?: React.ReactNode;
 }
 
 /**
@@ -47,11 +48,15 @@ export function MetricPanels({ panels }: { panels: MetricPanel[] }) {
                 {panels.map((panel) => (
                     <section key={panel.id} className="w-full shrink-0 snap-center px-4">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint mb-2">{panel.title}</p>
-                        <div className={`grid gap-2 ${panel.items.length > 3 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                            {panel.items.map((item) => (
-                                <MetricCell key={item.label} item={item} />
-                            ))}
-                        </div>
+                        {panel.content ? (
+                            <div>{panel.content}</div>
+                        ) : (
+                            <div className={`grid gap-2 ${panel.items && panel.items.length > 3 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                {panel.items?.map((item) => (
+                                    <MetricCell key={item.label} item={item} />
+                                ))}
+                            </div>
+                        )}
                     </section>
                 ))}
             </div>
