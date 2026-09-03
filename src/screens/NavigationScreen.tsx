@@ -96,6 +96,21 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
 
             map.on('error', (event) => console.error('MapLibre:', event.error));
             map.on('dragstart', () => setFollowing(false));
+            // When the user initiates movement (pan/zoom/rotate/pitch) via pointer/touch/wheel
+            // MapLibre events set `originalEvent` for user-driven interactions. Guard so
+            // programmatic `easeTo`/`jumpTo` don't disable following.
+            map.on('movestart', (e: any) => {
+                if (e && e.originalEvent) setFollowing(false);
+            });
+            map.on('zoomstart', (e: any) => {
+                if (e && e.originalEvent) setFollowing(false);
+            });
+            map.on('rotatestart', (e: any) => {
+                if (e && e.originalEvent) setFollowing(false);
+            });
+            map.on('pitchstart', (e: any) => {
+                if (e && e.originalEvent) setFollowing(false);
+            });
             map.on('load', () => {
                 addRouteLayers(map, route.geoJson, { width: 6, showProgress: true });
 
@@ -322,15 +337,26 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 </div>
             </div>
 
-            {!following && (
-                <button
-                    onClick={() => setFollowing(true)}
-                    className="absolute right-3 bottom-[17rem] z-20 touch-target grid place-items-center bg-surface border border-line rounded-full shadow-md text-moss"
-                    aria-label="Volver a centrar en mi posición"
-                >
-                    <Crosshair size={22} />
-                </button>
-            )}
+            <button
+                onClick={() => {
+                    setFollowing(true);
+                    try {
+                        const map = mapRef.current;
+                        if (map && position) {
+                            map.easeTo({
+                                center: [position.lng, position.lat],
+                                bearing: rotateWithHeading ? heading ?? course ?? map.getBearing() : 0,
+                                duration: 700,
+                                easing: (t) => t,
+                            });
+                        }
+                    } catch { }
+                }}
+                className={`absolute right-3 bottom-[17rem] z-20 touch-target grid place-items-center rounded-full shadow-md ${following ? 'bg-moss text-white border-moss border' : 'bg-surface border-line text-moss bg-surface'}`}
+                aria-label={following ? 'Centrado en mi posición (activo)' : 'Volver a centrar en mi posición'}
+            >
+                <Crosshair size={22} />
+            </button>
 
             <div className="absolute bottom-0 left-0 right-0 z-20 pb-safe">
                 {metrics?.offRoute && (
