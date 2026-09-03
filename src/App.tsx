@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Analytics } from '@vercel/analytics/react';
-import { Home, Upload, Map, Settings as SettingsIcon, Compass, Download, Activity, ArrowLeft, X } from 'lucide-react';
+import { Map, Settings as SettingsIcon, Route as RouteIcon } from 'lucide-react';
 import { HomeScreen } from './screens/HomeScreen';
 import { RouteImportScreen } from './screens/RouteImportScreen';
 import { RouteAnalysisScreen } from './screens/RouteAnalysisScreen';
@@ -81,7 +81,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handleBackButton);
   }, [currentScreen]);
 
-  const showBackButton = currentScreen !== 'home' && currentScreen !== 'navigation';
+  const showBottomNavigation = currentScreen === 'home' || currentScreen === 'offline' || currentScreen === 'settings';
 
   return (
     <div
@@ -89,30 +89,6 @@ export default function App() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Top bar for non-home screens */}
-      {showBackButton && (
-        <div className="pt-safe flex items-center justify-between px-4 py-2 bg-gradient-to-b from-zinc-900 to-zinc-950 border-b border-zinc-800">
-          <button
-            onClick={goBack}
-            className="p-2 -ml-2 hover:bg-zinc-800 rounded-lg transition-colors touch-target"
-            aria-label="Go back"
-          >
-            <ArrowLeft size={24} />
-          </button>
-          <h2 className="text-lg font-semibold flex-1 text-center">{getScreenTitle(currentScreen)}</h2>
-          <button
-            onClick={() => {
-              setCurrentScreen('home');
-              screenHistoryRef.current = [];
-            }}
-            className="p-2 -mr-2 hover:bg-zinc-800 rounded-lg transition-colors touch-target"
-            aria-label="Go home"
-          >
-            <Home size={24} />
-          </button>
-        </div>
-      )}
-
       {/* Main Content Area */}
       <main className={`flex-1 relative ${currentScreen === 'map' || currentScreen === 'navigation'
           ? 'overflow-hidden'
@@ -128,12 +104,12 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation Bar */}
-      {currentScreen !== 'navigation' && (
+      {showBottomNavigation && (
         <nav className="pb-safe bg-zinc-900 border-t border-zinc-800 sticky bottom-0 z-40">
           <div className="flex justify-around items-center h-16 px-2">
             <NavItem
-              icon={<Home size={24} />}
-              label="Home"
+              icon={<RouteIcon size={24} />}
+              label="Rutas"
               active={currentScreen === 'home'}
               onClick={() => {
                 setCurrentScreen('home');
@@ -141,26 +117,14 @@ export default function App() {
               }}
             />
             <NavItem
-              icon={<Upload size={24} />}
-              label="Import"
-              active={currentScreen === 'import'}
-              onClick={() => navigate('import')}
-            />
-            <NavItem
               icon={<Map size={24} />}
-              label="Explorer"
-              active={currentScreen === 'map'}
-              onClick={() => navigate('map')}
-            />
-            <NavItem
-              icon={<Download size={24} />}
-              label="Offline"
+              label="Mapas"
               active={currentScreen === 'offline'}
               onClick={() => navigate('offline')}
             />
             <NavItem
               icon={<SettingsIcon size={24} />}
-              label="Settings"
+              label="Ajustes"
               active={currentScreen === 'settings'}
               onClick={() => navigate('settings')}
             />
@@ -170,19 +134,6 @@ export default function App() {
       <Analytics />
     </div>
   );
-}
-
-function getScreenTitle(screen: Screen): string {
-  const titles: Record<Screen, string> = {
-    home: 'TrailNav',
-    import: 'Import Route',
-    analysis: 'Route Details',
-    map: 'Map Explorer',
-    navigation: 'Navigation',
-    offline: 'Offline Maps',
-    settings: 'Settings'
-  };
-  return titles[screen] || 'TrailNav';
 }
 
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Compass, Map as MapIcon, Upload, Navigation, ChevronRight, Activity, Wifi, WifiOff, Battery, Zap } from 'lucide-react';
+import { Compass, Plus, Navigation, ChevronRight, Route as RouteIcon, Wifi, WifiOff, Battery, Satellite, Play } from 'lucide-react';
 import { getRoutes, Route } from '../lib/db';
 import { Screen } from '../App';
 
@@ -48,106 +48,89 @@ export function HomeScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) 
   }, []);
 
   return (
-    <div className="p-4 space-y-6">
-      <header className="flex items-center justify-between pt-8 pb-4">
+    <div className="max-w-3xl mx-auto p-4 space-y-6 pb-8">
+      <header className="pt-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-emerald-500 flex items-center gap-2">
-            <Compass className="w-8 h-8" />
-            TrailNav
-          </h1>
-          <p className="text-zinc-400 text-sm mt-1">Offline GPS Navigation</p>
+          <div className="flex items-center gap-2 text-emerald-400">
+            <Compass className="w-7 h-7" />
+            <span className="text-sm font-bold uppercase tracking-widest">TrailNav</span>
+          </div>
+          <h1 className="text-3xl font-bold text-zinc-100 mt-3">Mis rutas</h1>
+          <p className="text-zinc-500 text-sm mt-1">Prepara, analiza y navega sin cobertura.</p>
         </div>
+        <button
+          onClick={() => onNavigate('import')}
+          className="h-12 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center gap-2 font-semibold shadow-lg shadow-emerald-950/30"
+        >
+          <Plus size={20} />
+          <span>Añadir</span>
+        </button>
       </header>
 
-      {/* Status Cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <StatusCard icon={<Navigation size={18} />} label="GPS" value={gpsStatus} color="text-emerald-400" />
-        <StatusCard icon={<MapIcon size={18} />} label="Offline Maps" value="Available" color="text-blue-400" />
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <StatusChip icon={<Satellite size={15} />} label={`GPS ${translateStatus(gpsStatus)}`} active={gpsStatus === 'Ready'} />
+        <StatusChip icon={onlineStatus ? <Wifi size={15} /> : <WifiOff size={15} />} label={onlineStatus ? 'Con conexion' : 'Modo offline'} active={onlineStatus} />
+        {batteryStatus.level > 0 && <StatusChip icon={<Battery size={15} />} label={`${batteryStatus.level}%${batteryStatus.charging ? ' cargando' : ''}`} active={batteryStatus.charging} />}
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <ActionButton
-          icon={<Upload size={24} />}
-          label="Import GPX"
-          onClick={() => onNavigate('import')}
-          primary
-        />
-        <ActionButton
-          icon={<MapIcon size={24} />}
-          label="Explorer"
-          onClick={() => onNavigate('map')}
-        />
-      </div>
-
-      {/* Recent Routes */}
-      <div>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2 text-zinc-300">
-          <Activity size={18} />
-          Recent Routes
-        </h2>
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+            <RouteIcon size={17} /> Rutas guardadas
+          </h2>
+          <span className="text-xs text-zinc-600">{routes.length}</span>
+        </div>
 
         {routes.length === 0 ? (
-          <div className="bg-zinc-900 rounded-2xl p-6 text-center border border-zinc-800">
-            <p className="text-zinc-500 mb-4">No routes imported yet.</p>
+          <div className="bg-zinc-900 rounded-2xl p-8 text-center border border-zinc-800">
+            <RouteIcon className="mx-auto text-zinc-700" size={34} />
+            <p className="text-zinc-300 font-semibold mt-4">Todavia no hay rutas</p>
+            <p className="text-zinc-500 text-sm mt-1 mb-5">Importa un track para analizar desnivel, ETA y meteorologia.</p>
             <button
               onClick={() => onNavigate('import')}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-sm font-medium transition-colors"
+              className="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-semibold transition-colors"
             >
-              Import your first route
+              Importar primera ruta
             </button>
           </div>
         ) : (
           <div className="space-y-3">
             {routes.map(route => (
-              <button
-                key={route.id}
-                onClick={() => onNavigate('analysis', route)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between hover:bg-zinc-800 transition-colors text-left group"
-              >
-                <div>
-                  <h3 className="font-medium text-zinc-100 truncate pr-4">{route.name}</h3>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500 font-mono">
-                    <span>{(route.distance / 1000).toFixed(1)} km</span>
-                    <span>â€¢</span>
-                    <span className="text-emerald-500/80">â†‘ {Math.round(route.elevationGain)}m</span>
+              <article key={route.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+                <button onClick={() => onNavigate('analysis', route)} className="w-full flex items-start justify-between text-left group">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-zinc-100 truncate pr-4">{route.name}</h3>
+                    <div className="flex items-center gap-3 mt-2 text-xs text-zinc-400">
+                      <span>{(route.distance / 1000).toFixed(1)} km</span>
+                      <span className="text-emerald-400">+{Math.round(route.elevationGain)} m</span>
+                      <span>{Math.round(route.maxElevation)} m max</span>
+                    </div>
                   </div>
+                  <ChevronRight className="text-zinc-600 group-hover:text-emerald-500 transition-colors shrink-0" size={20} />
+                </button>
+                <div className="flex gap-2 mt-4 pt-3 border-t border-zinc-800">
+                  <button onClick={() => onNavigate('analysis', route)} className="flex-1 py-2.5 bg-zinc-800 text-zinc-200 rounded-lg text-sm font-medium">Preparar</button>
+                  <button onClick={() => onNavigate('navigation', route)} className="flex-1 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2"><Play size={15} /> Navegar</button>
                 </div>
-                <ChevronRight className="text-zinc-600 group-hover:text-emerald-500 transition-colors" size={20} />
-              </button>
+              </article>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
 
-function StatusCard({ icon, label, value, color }: { icon: React.ReactNode, label: string, value: string, color: string }) {
-  return (
-    <div className={`${color} rounded-2xl p-3 flex items-center gap-3 border border-opacity-20 border-white shadow-md touch-target`}>
-      <div className="p-2.5 bg-black/20 rounded-lg">
-        {icon}
-      </div>
-      <div className="flex-1">
-        <p className="text-[11px] uppercase tracking-wider font-semibold opacity-75">{label}</p>
-        <p className="text-sm font-bold">{value}</p>
-      </div>
-    </div>
-  );
+function translateStatus(status: string) {
+  if (status === 'Ready') return 'listo';
+  if (status === 'Unavailable') return 'no disponible';
+  return 'comprobando';
 }
 
-function ActionButton({ icon, label, onClick, primary }: { icon: React.ReactNode, label: string, onClick: () => void, primary?: boolean }) {
+function StatusChip({ icon, label, active }: { icon: React.ReactNode, label: string, active: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-center justify-center p-6 rounded-3xl transition-all active:scale-95 touch-target font-semibold shadow-lg ${primary
-          ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white'
-          : 'bg-gradient-to-br from-zinc-800 to-zinc-900 hover:from-zinc-700 hover:to-zinc-800 text-zinc-100'
-        }`}
-    >
-      <div className="mb-2">{icon}</div>
-      <span className="text-sm">{label}</span>
-    </button>
+    <div className={`shrink-0 h-9 px-3 rounded-lg border flex items-center gap-2 text-xs font-medium ${active ? 'bg-emerald-950/50 border-emerald-900 text-emerald-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'}`}>
+      {icon}<span>{label}</span>
+    </div>
   );
 }

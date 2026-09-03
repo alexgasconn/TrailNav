@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Download, Map as MapIcon, Trash2, HardDrive, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Map as MapIcon, Trash2, HardDrive, CheckCircle2, Info } from 'lucide-react';
 import { Screen } from '../App';
 
 export function OfflineMapManagerScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [maps, setMaps] = useState([
-    { id: '1', name: 'Yosemite Valley', size: '120 MB', date: '2023-10-24' },
-    { id: '2', name: 'Grand Canyon South Rim', size: '85 MB', date: '2023-11-02' }
+    { id: '1', name: 'Catalunya', size: '1.2 GB', date: '2026-09-03' },
+    { id: '2', name: 'Pirineu catala', size: '640 MB', date: '2026-09-03' },
+    { id: '3', name: 'Montseny i Montserrat', size: '285 MB', date: '2026-09-03' }
   ]);
+  const storageUsed = maps.reduce((total, map) => total + (map.size.includes('GB') ? parseFloat(map.size) * 1024 : parseFloat(map.size)), 0);
 
   const handleDownload = () => {
     setDownloading(true);
@@ -43,10 +45,10 @@ export function OfflineMapManagerScreen({ onNavigate }: { onNavigate: (s: Screen
           <div className="p-3 bg-zinc-800 rounded-2xl text-emerald-500">
             <HardDrive size={24} />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-zinc-400">Storage Used</span>
-              <span className="text-zinc-100 font-medium">205 MB</span>
+              <span className="text-zinc-400">Espacio estimado</span>
+              <span className="text-zinc-100 font-medium">{storageUsed >= 1024 ? `${(storageUsed / 1024).toFixed(1)} GB` : `${Math.round(storageUsed)} MB`}</span>
             </div>
             <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
               <div className="h-full bg-emerald-500 w-1/4 rounded-full" />
@@ -56,14 +58,14 @@ export function OfflineMapManagerScreen({ onNavigate }: { onNavigate: (s: Screen
 
         {/* Download New */}
         <div>
-          <h2 className="text-lg font-semibold mb-3 text-zinc-300">Download Region</h2>
+          <h2 className="text-lg font-semibold mb-3 text-zinc-300">Añadir region</h2>
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
-            <p className="text-sm text-zinc-400 mb-4">Select an area on the map to download tiles for offline use.</p>
+            <p className="text-sm text-zinc-400 mb-4">Prepara una zona para disponer de cartografia durante la actividad.</p>
             
             {downloading ? (
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-emerald-500 font-medium">Downloading...</span>
+                  <span className="text-emerald-500 font-medium">Preparando paquete...</span>
                   <span className="text-zinc-400 font-mono">{progress}%</span>
                 </div>
                 <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
@@ -79,7 +81,7 @@ export function OfflineMapManagerScreen({ onNavigate }: { onNavigate: (s: Screen
                 className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
               >
                 <MapIcon size={20} />
-                Select Area
+                Seleccionar zona
               </button>
             )}
           </div>
@@ -87,7 +89,10 @@ export function OfflineMapManagerScreen({ onNavigate }: { onNavigate: (s: Screen
 
         {/* Downloaded Maps */}
         <div>
-          <h2 className="text-lg font-semibold mb-3 text-zinc-300">Saved Maps</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-zinc-300">Regiones de ejemplo</h2>
+            <span className="text-xs text-zinc-600">Catalunya</span>
+          </div>
           <div className="space-y-3">
             {maps.map(map => (
               <div key={map.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between group">
@@ -113,6 +118,11 @@ export function OfflineMapManagerScreen({ onNavigate }: { onNavigate: (s: Screen
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="flex gap-3 p-4 border border-amber-900/50 bg-amber-950/20 rounded-2xl text-xs text-amber-200/80">
+          <Info size={18} className="shrink-0" />
+          <p>Catalogo de prototipo. La descarga real de teselas vectoriales y DEM regionales sigue en desarrollo.</p>
         </div>
       </div>
     </div>

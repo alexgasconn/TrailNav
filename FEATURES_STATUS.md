@@ -34,7 +34,8 @@ Estados: **Completada**, **En progreso**, **Pendiente**.
 | Navegacion | Maniobras desde geometria | Pendiente | Falta detector de giros |
 | Mapas | Explorador MapLibre | Completada | Mapa y estilos base |
 | Mapas | Capas topografica/hillshade/pendiente | Pendiente | Falta pipeline DEM local |
-| Mapas | Mapas regionales offline reales | Pendiente | El gestor aun es interfaz base |
+| Mapas | Catalogo regional Catalunya | Completada | Ejemplos Catalunya, Pirineu catala y Montseny/Montserrat |
+| Mapas | Mapas regionales offline reales | Pendiente | La interfaz no descarga aun teselas vectoriales ni DEM |
 | POIs | POIs offline | Pendiente | Falta almacenamiento y capa visual |
 
 ## ETA y actividad
@@ -47,8 +48,8 @@ Estados: **Completada**, **En progreso**, **Pendiente**.
 | ETA | Adaptacion al rendimiento | Pendiente | Falta historial de actividad |
 | Actividad | Sesion y puntos GPS | Pendiente | Falta persistencia de actividad |
 | Actividad | Tiempo en movimiento | En progreso | Se muestran datos basicos en navegacion |
-| Meteorologia | Proveedor Open-Meteo | Pendiente | Falta interfaz y cache |
-| Meteorologia | Timeline espacial/temporal offline | Pendiente | Depende del motor ETA y cache local |
+| Meteorologia | Proveedor Open-Meteo | Completada | Consulta sin API key desde la preparacion de ruta |
+| Meteorologia | Timeline espacial/temporal offline | En progreso | Inicio, mitad y final segun ETA con cache local; falta muestreo horario completo |
 
 ## Plataforma
 
@@ -59,6 +60,8 @@ Estados: **Completada**, **En progreso**, **Pendiente**.
 | Android | Wake lock, vibracion, bateria | En progreso | APIs disponibles con soporte del navegador |
 | Calidad | TypeScript sin errores | En progreso | Verificar despues de cada bloque |
 | Calidad | Pruebas automatizadas de motores | Pendiente | Prioridad para los algoritmos nuevos |
+| UX | Navegacion centrada en rutas | Completada | Tabs Rutas, Mapas y Ajustes; importar es una accion contextual |
+| UX | Centro de preparacion de ruta | Completada | Accesos a mapa, analisis, meteo y navegacion desde la ruta |
 
 ## Siguiente bloque recomendado
 

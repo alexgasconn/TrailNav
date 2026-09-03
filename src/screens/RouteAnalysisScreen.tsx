@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import { ArrowLeft, Play, Map as MapIcon, Mountain, ArrowUpRight, ArrowDownRight, Clock, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Play, Map as MapIcon, Mountain, ArrowUpRight, ArrowDownRight, Clock, TrendingDown, TrendingUp, CloudSun, ChartNoAxesCombined } from 'lucide-react';
 import { Route } from '../lib/db';
 import { Screen } from '../App';
 import * as turf from '@turf/turf';
 import { analyzeRoute, TerrainSegment } from '../lib/routeAnalysis';
 import { estimateRouteTime } from '../lib/eta';
+import { RouteWeatherPanel } from '../components/RouteWeatherPanel';
 
 export function RouteAnalysisScreen({ route, onNavigate }: { route: Route, onNavigate: (s: Screen, r?: Route) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -90,6 +91,13 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route, onNav
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div className="grid grid-cols-4 gap-2">
+          <RouteAction icon={<MapIcon size={19} />} label="Mapa" onClick={() => onNavigate('map', route)} />
+          <RouteAction icon={<ChartNoAxesCombined size={19} />} label="Analisis" onClick={() => document.getElementById('analysis')?.scrollIntoView({ behavior: 'smooth' })} />
+          <RouteAction icon={<CloudSun size={19} />} label="Meteo" onClick={() => document.getElementById('weather')?.scrollIntoView({ behavior: 'smooth' })} />
+          <RouteAction icon={<Play size={19} />} label="Navegar" primary onClick={() => onNavigate('navigation', route)} />
+        </div>
+
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-3">
           <StatCard icon={<MapIcon size={18} />} label="Distance" value={`${(route.distance / 1000).toFixed(2)} km`} />
@@ -130,7 +138,7 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route, onNav
           </div>
         </div>
 
-        <section>
+        <section id="analysis" className="scroll-mt-20">
           <div className="flex items-end justify-between mb-3">
             <div>
               <p className="text-xs uppercase tracking-wider text-emerald-500 font-semibold">Route intelligence</p>
@@ -151,6 +159,8 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route, onNav
             </div>
           )}
         </section>
+
+        <RouteWeatherPanel route={route} etaMinutes={eta.minutes} />
       </div>
 
       {/* Action Bar */}
@@ -173,6 +183,14 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route, onNav
         </div>
       </div>
     </div>
+  );
+}
+
+function RouteAction({ icon, label, onClick, primary = false }: { icon: React.ReactNode; label: string; onClick: () => void; primary?: boolean }) {
+  return (
+    <button onClick={onClick} className={`h-16 rounded-xl flex flex-col items-center justify-center gap-1 text-xs font-semibold ${primary ? 'bg-emerald-600 text-white' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}>
+      {icon}<span>{label}</span>
+    </button>
   );
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, File, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { UploadCloud, AlertCircle, CheckCircle2, ArrowLeft, ChartNoAxesCombined, CloudSun, Navigation } from 'lucide-react';
 import { parseGPX } from '../lib/gpx';
 import { saveRoute } from '../lib/db';
 import { Screen } from '../App';
@@ -14,7 +14,7 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
 
   const handleFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.gpx')) {
-      setError('Please upload a valid .gpx file');
+      setError('Selecciona un archivo GPX valido. FIT y KML estaran disponibles proximamente.');
       return;
     }
 
@@ -30,7 +30,7 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
         onNavigate('analysis', route);
       }, 1500);
     } catch (err: any) {
-      setError(err.message || 'Failed to parse GPX file');
+      setError(err.message || 'No se ha podido procesar la ruta');
     } finally {
       setIsProcessing(false);
     }
@@ -52,17 +52,26 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
   };
 
   return (
-    <div className="p-4 h-full flex flex-col">
+    <div className="p-4 min-h-full flex flex-col bg-zinc-950">
       <header className="flex items-center gap-4 pt-8 pb-6">
         <button onClick={() => onNavigate('home')} className="p-2 -ml-2 text-zinc-400 hover:text-zinc-100 transition-colors">
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-2xl font-bold text-zinc-100">Import Route</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-100">Añadir ruta</h1>
+          <p className="text-sm text-zinc-500 mt-1">El primer paso para preparar tu actividad</p>
+        </div>
       </header>
 
-      <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full">
+      <div className="flex-1 max-w-md mx-auto w-full pt-4">
+        <div className="grid grid-cols-3 gap-2 mb-6">
+          <ProcessStep icon={<UploadCloud size={18} />} label="Importar" active />
+          <ProcessStep icon={<ChartNoAxesCombined size={18} />} label="Analizar" />
+          <ProcessStep icon={<Navigation size={18} />} label="Preparar" />
+        </div>
+
         <div
-          className={`relative border-2 border-dashed rounded-3xl p-8 text-center transition-all duration-200 ${
+          className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200 ${
             isDragging 
               ? 'border-emerald-500 bg-emerald-500/10' 
               : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500'
@@ -85,8 +94,8 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
             </div>
             
             <div>
-              <p className="text-lg font-medium text-zinc-200">Upload GPX File</p>
-              <p className="text-sm text-zinc-500 mt-1">Drag & drop or tap to browse</p>
+              <p className="text-lg font-medium text-zinc-200">Selecciona un archivo GPX</p>
+              <p className="text-sm text-zinc-500 mt-1">Puedes arrastrarlo aqui o buscarlo en el dispositivo</p>
             </div>
 
             <button
@@ -94,7 +103,7 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
               disabled={isProcessing}
               className="mt-4 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-medium rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isProcessing ? 'Processing...' : 'Select File'}
+              {isProcessing ? 'Analizando ruta...' : 'Buscar archivo'}
             </button>
           </div>
         </div>
@@ -110,12 +119,25 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
           <div className="mt-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-start gap-3 text-emerald-400">
             <CheckCircle2 className="shrink-0 mt-0.5" size={20} />
             <div>
-              <p className="text-sm font-medium">Route imported successfully!</p>
-              <p className="text-xs opacity-80 mt-1">{success.name}</p>
+              <p className="text-sm font-medium">Ruta importada y analizada</p>
+              <p className="text-xs opacity-80 mt-1">Abriendo la preparacion de {success.name}...</p>
             </div>
           </div>
         )}
+
+        <div className="mt-6 flex items-start gap-3 text-xs text-zinc-500 px-2">
+          <CloudSun size={18} className="shrink-0 text-sky-500" />
+          <p>Despues podras revisar desnivel, subidas, ETA, meteo y mapa antes de iniciar la navegacion.</p>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function ProcessStep({ icon, label, active = false }: { icon: React.ReactNode; label: string; active?: boolean }) {
+  return (
+    <div className={`h-16 rounded-xl border flex flex-col items-center justify-center gap-1 text-xs font-medium ${active ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}>
+      {icon}<span>{label}</span>
     </div>
   );
 }
