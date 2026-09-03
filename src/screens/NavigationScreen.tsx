@@ -116,6 +116,21 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     .setLngLat(profile.coordinates[0] ?? [0, 40])
                     .addTo(map);
 
+                // Force a resize after load and again shortly after to ensure the canvas
+                // fills the container (fixes cases where only the lower part is visible).
+                try {
+                    map.resize();
+                } catch (e) {
+                    // ignore
+                }
+                window.setTimeout(() => {
+                    try {
+                        map.resize();
+                    } catch (e) {
+                        // ignore
+                    }
+                }, 200);
+
                 setMapReady(true);
             });
         });

@@ -225,7 +225,7 @@ O usar Chrome DevTools:
 ## 🎯 Métricas de Mejora
 
 | Aspecto | Antes | Después |
-|---------|-------|---------|
+| --------- | ------- | --------- |
 | Accesibilidad | Básica | WCAG 2.1 AA |
 | Responsiveness | Manual | Full viewport |
 | Touch targets | 24x24px | 44x44px |

@@ -10,7 +10,6 @@
 
 [Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Improvements](#-android-optimizations) • [Development](#-development)
 
-
 </div>
 
 <!-- Last updated: 2026-09-03 -->
@@ -335,7 +334,7 @@ vibration.cancel();               // Stop
 ## 📊 Browser Support
 
 | Browser | Android | iOS | Desktop |
-|---------|---------|-----|---------|
+| --------- | --------- | ----- | --------- |
 | Chrome | ✅ Full | ✅ Web | ✅ Full |
 | Firefox | ✅ Full | ⚠️ Limited | ✅ Full |
 | Safari | ✅ Web | ✅ Limited | ✅ Limited |
