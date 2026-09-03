@@ -161,33 +161,33 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
 
     return (
         <section className="bg-surface border border-line rounded-2xl p-4">
-                    <div className="flex items-center justify-between gap-3 mb-3">
-                        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Meteorología en ruta</h2>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                className="h-8 px-2 rounded-xl border border-line bg-surface text-sm"
-                                aria-label="Fecha de inicio"
-                            />
-                            <input
-                                type="time"
-                                value={startTime}
-                                onChange={(e) => setStartTime(e.target.value)}
-                                className="h-8 px-2 rounded-xl border border-line bg-surface text-sm"
-                                aria-label="Hora de inicio"
-                            />
-                            <button
-                                onClick={refresh}
-                                disabled={loading}
-                                className="touch-target grid place-items-center text-ink-soft disabled:opacity-50"
-                                aria-label="Actualizar previsión"
-                            >
-                                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                            </button>
-                        </div>
-                    </div>
+            <div className="flex items-center justify-between gap-3 mb-3">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Meteorología en ruta</h2>
+                <div className="flex items-center gap-2">
+                    <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="h-8 px-2 rounded-xl border border-line bg-surface text-sm"
+                        aria-label="Fecha de inicio"
+                    />
+                    <input
+                        type="time"
+                        value={startTime}
+                        onChange={(e) => setStartTime(e.target.value)}
+                        className="h-8 px-2 rounded-xl border border-line bg-surface text-sm"
+                        aria-label="Hora de inicio"
+                    />
+                    <button
+                        onClick={refresh}
+                        disabled={loading}
+                        className="touch-target grid place-items-center text-ink-soft disabled:opacity-50"
+                        aria-label="Actualizar previsión"
+                    >
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+            </div>
 
             {loading && !timeline && <div className="h-24 rounded-xl bg-surface-soft animate-pulse" />}
 
@@ -203,27 +203,27 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
                     <div className="mb-3">
                         <canvas ref={canvasRef} className="w-full rounded-xl bg-canvas" style={{ height: 140 }} />
                     </div>
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="flex gap-1">
-                                    {timeline.samples.map((s) => (
-                                        <button
-                                            key={s.label}
-                                            onClick={() => setVisible((v) => ({ ...v, [s.label]: !v[s.label] }))}
-                                            className={`px-2 py-1 rounded-md text-sm border ${visible[s.label] ? 'bg-moss text-white border-moss' : 'bg-surface border-line text-ink'}`}
-                                        >
-                                            {s.label}
-                                        </button>
-                                    ))}
-                                </div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="flex gap-1">
+                            {timeline.samples.map((s) => (
+                                <button
+                                    key={s.label}
+                                    onClick={() => setVisible((v) => ({ ...v, [s.label]: !v[s.label] }))}
+                                    className={`px-2 py-1 rounded-md text-sm border ${visible[s.label] ? 'bg-moss text-white border-moss' : 'bg-surface border-line text-ink'}`}
+                                >
+                                    {s.label}
+                                </button>
+                            ))}
+                        </div>
 
-                                <div className="ml-auto flex items-center gap-2">
-                                    <label className="text-xs text-ink-faint">Horas</label>
-                                    <input type="number" value={hours} onChange={(e) => setHours(Number(e.target.value) || 1)} className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm" />
-                                    <button onClick={exportTimeline} className="h-8 px-3 rounded-xl bg-surface border border-line text-ink text-sm">Guardar</button>
-                                </div>
-                            </div>
+                        <div className="ml-auto flex items-center gap-2">
+                            <label className="text-xs text-ink-faint">Horas</label>
+                            <input type="number" value={hours} onChange={(e) => setHours(Number(e.target.value) || 1)} className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm" />
+                            <button onClick={exportTimeline} className="h-8 px-3 rounded-xl bg-surface border border-line text-ink text-sm">Guardar</button>
+                        </div>
+                    </div>
 
-                            <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                         {timeline.samples.map((sample) => (
                             <article key={sample.label} className="bg-canvas border border-line rounded-xl p-3 min-w-0">
                                 <p className="text-[10px] uppercase tracking-wide text-ink-faint truncate">{sample.label}</p>

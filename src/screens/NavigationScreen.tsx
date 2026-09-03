@@ -345,7 +345,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 <div className="bg-surface-soft/95 backdrop-blur border-t border-line pt-3 pb-3">
                     {/* Info windows: profile, weather, and slope details (swipable) */}
                     <div className="px-4 pb-2">
-                            <InfoWindows windows={buildInfoWindows(profile, route, metrics, slopeWindowMeters, setSlopeWindowMeters)} />
+                        <InfoWindows windows={buildInfoWindows(profile, route, metrics, slopeWindowMeters, setSlopeWindowMeters)} />
                     </div>
                     <MetricPanels panels={panels} />
 

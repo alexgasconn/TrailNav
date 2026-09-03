@@ -15,6 +15,7 @@ import {
     getStorageUsage,
     listTiles,
 } from '../lib/offlineTiles';
+import { verifyTileExists, preloadTilesToCache, getMissingTilesForRegion, downloadTiles, TileCoordinate } from '../lib/offlineTiles';
 import { formatBytes, formatDate, formatInteger, formatPercent } from '../lib/format';
 
 const DETAIL_LEVELS = [
@@ -45,6 +46,9 @@ export function OfflineMapManagerScreen({ route }: { route: Route | null }) {
     const [maxZoom, setMaxZoom] = useState(15);
     const [tileCount, setTileCount] = useState(0);
     const [regions, setRegions] = useState<MapRegion[]>([]);
+    const [regionChecks, setRegionChecks] = useState<Record<string, { checked: number; total: number; failed: number }>>({});
+    const [missingTiles, setMissingTiles] = useState<Record<string, { tiles: TileCoordinate[]; loading: boolean }>>({});
+    const [downloadingMissing, setDownloadingMissing] = useState<Record<string, DownloadProgress | null>>({});
     const [usage, setUsage] = useState<StorageUsage | null>(null);
     const [progress, setProgress] = useState<DownloadProgress | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -140,6 +144,45 @@ export function OfflineMapManagerScreen({ route }: { route: Route | null }) {
 
     const removeRegion = async (regionId: string) => {
         await deleteRegion(regionId);
+        await refreshList();
+    };
+
+    const verifyRegion = async (region: MapRegion, full = false) => {
+        const tiles = listTiles(region.bounds, region.minZoom, region.maxZoom);
+        const toCheck = full ? tiles : tiles.slice(0, Math.min(tiles.length, 500));
+        setRegionChecks((r) => ({ ...r, [region.id]: { checked: 0, total: toCheck.length, failed: 0 } }));
+        let checked = 0;
+        let failed = 0;
+        for (const t of toCheck) {
+            // eslint-disable-next-line no-await-in-loop
+            const ok = await verifyTileExists(region.style, t.z, t.x, t.y);
+            checked += 1;
+            if (!ok) failed += 1;
+            setRegionChecks((r) => ({ ...r, [region.id]: { checked, total: toCheck.length, failed } }));
+        }
+    };
+
+    const preloadRegion = async (region: MapRegion) => {
+        const tiles = listTiles(region.bounds, region.minZoom, region.maxZoom);
+        const cap = Math.min(tiles.length, 1000);
+        const toPreload = tiles.slice(0, cap);
+        // fire and forget but await to show completion
+        await preloadTilesToCache(toPreload, region.style);
+    };
+
+    const showMissingForRegion = async (region: MapRegion) => {
+        setMissingTiles((m) => ({ ...m, [region.id]: { tiles: [], loading: true } }));
+        const missing = await getMissingTilesForRegion(region);
+        setMissingTiles((m) => ({ ...m, [region.id]: { tiles: missing, loading: false } }));
+    };
+
+    const downloadMissingForRegion = async (region: MapRegion) => {
+        const entry = missingTiles[region.id];
+        if (!entry || entry.tiles.length === 0) return;
+        setDownloadingMissing((d) => ({ ...d, [region.id]: { completed: 0, total: entry.tiles.length, bytes: 0, failed: 0 } }));
+        const progress = await downloadTiles(entry.tiles, region.style, region.id, (p) => setDownloadingMissing((d) => ({ ...d, [region.id]: p })), undefined, 2);
+        setDownloadingMissing((d) => ({ ...d, [region.id]: progress }));
+        // refresh list/usage after
         await refreshList();
     };
 
@@ -280,13 +323,52 @@ export function OfflineMapManagerScreen({ route }: { route: Route | null }) {
                                         {MAP_STYLE_LABELS[region.style]} · {formatDate(region.createdAt)}
                                     </p>
                                 </div>
-                                <button
-                                    onClick={() => removeRegion(region.id)}
-                                    className="touch-target grid place-items-center text-ink-faint hover:text-alert"
-                                    aria-label={`Eliminar ${region.name}`}
-                                >
-                                    <Trash2 size={20} />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => verifyRegion(region)}
+                                        className="touch-target grid place-items-center text-ink-faint hover:text-ink"
+                                        aria-label={`Verificar ${region.name}`}
+                                        title="Verificar teselas (muestra)">
+                                        <Loader2 size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => preloadRegion(region)}
+                                        className="touch-target grid place-items-center text-ink-faint hover:text-ink"
+                                        aria-label={`Precargar ${region.name}`}
+                                        title="Precargar teselas en caché">
+                                        <Download size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => removeRegion(region.id)}
+                                        className="touch-target grid place-items-center text-ink-faint hover:text-alert"
+                                        aria-label={`Eliminar ${region.name}`}
+                                    >
+                                        <Trash2 size={20} />
+                                    </button>
+                                </div>
+                                {regionChecks[region.id] && (
+                                    <div className="text-xs text-ink-faint mt-2">Verificado {regionChecks[region.id].checked}/{regionChecks[region.id].total} · Fallos {regionChecks[region.id].failed}</div>
+                                )}
+                                <div className="mt-2">
+                                    {missingTiles[region.id] ? (
+                                        missingTiles[region.id].loading ? (
+                                            <div className="text-xs text-ink-faint">Cargando faltantes…</div>
+                                        ) : (
+                                            <div className="text-xs text-ink-faint">Faltan {missingTiles[region.id].tiles.length} teselas</div>
+                                        )
+                                    ) : (
+                                        <button onClick={() => showMissingForRegion(region)} className="text-xs text-ink-faint underline">Mostrar faltantes</button>
+                                    )}
+                                </div>
+                                {missingTiles[region.id] && !missingTiles[region.id].loading && missingTiles[region.id].tiles.length > 0 && (
+                                    <div className="mt-2 flex gap-2">
+                                        <button onClick={() => downloadMissingForRegion(region)} className="h-8 px-3 rounded-xl bg-moss text-white text-sm">Descargar faltantes</button>
+                                        <button onClick={() => setMissingTiles((m) => ({ ...m, [region.id]: undefined as any }))} className="h-8 px-3 rounded-xl border border-line text-sm">Cerrar</button>
+                                    </div>
+                                )}
+                                {downloadingMissing[region.id] && (
+                                    <div className="text-xs text-ink-faint mt-2">Descargando {downloadingMissing[region.id]?.completed}/{downloadingMissing[region.id]?.total} · Fallos {downloadingMissing[region.id]?.failed}</div>
+                                )}
                             </li>
                         ))}
                     </ul>

@@ -57,14 +57,49 @@ export function registerTileProtocol() {
         const y = Number(match[4]);
 
         const stored = await readTile(style, z, x, y);
-        if (stored) return { data: await stored.blob.arrayBuffer() };
+        if (stored) {
+            try {
+                const ab = await (stored.blob as Blob).arrayBuffer();
+                return { arrayBuffer: ab } as any;
+            } catch (e) {
+                console.warn('Tesela almacenada inválida, continuará con red:', style, z, x, y, e);
+            }
+        }
 
         if (!navigator.onLine) throw new Error('Tesela no disponible sin conexión');
 
         const response = await fetch(TILE_SOURCES[style].url(z, x, y), { signal: abortController?.signal });
         if (!response.ok) throw new Error(`Error ${response.status} al descargar la tesela`);
-        return { data: await response.arrayBuffer() };
+        const ab = await response.arrayBuffer();
+        return { arrayBuffer: ab } as any;
     });
+}
+
+export async function verifyTileExists(style: MapStyleId, z: number, x: number, y: number): Promise<boolean> {
+    const stored = await readTile(style, z, x, y);
+    if (!stored) return false;
+    try {
+        await (stored.blob as Blob).arrayBuffer();
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function preloadTilesToCache(tiles: TileCoordinate[], style: MapStyleId) {
+    // Create Image objects that load via the custom protocol so the browser decodes and caches them.
+    const promises: Promise<void>[] = [];
+    for (const t of tiles) {
+        const url = `${TILE_PROTOCOL}://tile/${style}/${t.z}/${t.x}/${t.y}`;
+        const p = new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            img.src = url;
+        });
+        promises.push(p);
+    }
+    await Promise.all(promises);
 }
 
 export interface TileCoordinate {
@@ -137,6 +172,44 @@ export async function downloadRegion(options: DownloadOptions): Promise<MapRegio
     const regionId = crypto.randomUUID();
     const progress: DownloadProgress = { completed: 0, total: tiles.length, bytes: 0, failed: 0 };
 
+    // helper to fetch and store a single tile with retries
+    async function fetchAndStoreTile(tile: TileCoordinate, retries = 2) {
+        const key = tileKey(style, tile.z, tile.x, tile.y);
+        try {
+            const existing = await db.get('tiles', key);
+            if (existing) {
+                progress.bytes += existing.size;
+                return true;
+            }
+        } catch {
+            // ignore and attempt fetch
+        }
+
+        for (let attempt = 0; attempt <= retries; attempt += 1) {
+            if (signal?.aborted) return false;
+            try {
+                const response = await fetch(TILE_SOURCES[style].url(tile.z, tile.x, tile.y), { signal });
+                if (!response.ok) throw new Error(String(response.status));
+                const blob = await response.blob();
+                await db.put('tiles', { key, regionId, blob, size: blob.size });
+                progress.bytes += blob.size;
+                return true;
+            } catch (err) {
+                if (signal?.aborted) return false;
+                if (attempt < retries) {
+                    // exponential backoff
+                    const wait = 200 * 2 ** attempt;
+                    // eslint-disable-next-line no-await-in-loop
+                    await new Promise((r) => setTimeout(r, wait));
+                    continue;
+                }
+                // final failure
+                return false;
+            }
+        }
+        return false;
+    }
+
     let cursor = 0;
     const worker = async () => {
         while (cursor < tiles.length) {
@@ -144,18 +217,9 @@ export async function downloadRegion(options: DownloadOptions): Promise<MapRegio
             const tile = tiles[cursor];
             cursor += 1;
 
-            const key = tileKey(style, tile.z, tile.x, tile.y);
             try {
-                const existing = await db.get('tiles', key);
-                if (existing) {
-                    progress.bytes += existing.size;
-                } else {
-                    const response = await fetch(TILE_SOURCES[style].url(tile.z, tile.x, tile.y), { signal });
-                    if (!response.ok) throw new Error(String(response.status));
-                    const blob = await response.blob();
-                    await db.put('tiles', { key, regionId, blob, size: blob.size });
-                    progress.bytes += blob.size;
-                }
+                const ok = await fetchAndStoreTile(tile, 2);
+                if (!ok) progress.failed += 1;
             } catch {
                 if (signal?.aborted) return;
                 progress.failed += 1;
@@ -206,6 +270,69 @@ export async function getRegions(): Promise<MapRegion[]> {
     const db = await getDB();
     const regions = await db.getAllFromIndex('maps', 'by-date');
     return regions.reverse();
+}
+
+export async function getMissingTilesForRegion(region: MapRegion): Promise<TileCoordinate[]> {
+    const expected = listTiles(region.bounds, region.minZoom, region.maxZoom);
+    const db = await getDB();
+    const missing: TileCoordinate[] = [];
+    for (const t of expected) {
+        const key = tileKey(region.style, t.z, t.x, t.y);
+        // eslint-disable-next-line no-await-in-loop
+        const existing = await db.get('tiles', key);
+        if (!existing) missing.push(t);
+    }
+    return missing;
+}
+
+export async function downloadTiles(tiles: TileCoordinate[], style: MapStyleId, regionId: string, onProgress?: (p: DownloadProgress) => void, signal?: AbortSignal, retries = 2) {
+    const db = await getDB();
+    const progress: DownloadProgress = { completed: 0, total: tiles.length, bytes: 0, failed: 0 };
+
+    let cursor = 0;
+    const worker = async () => {
+        while (cursor < tiles.length) {
+            if (signal?.aborted) return;
+            const tile = tiles[cursor];
+            cursor += 1;
+            const key = tileKey(style, tile.z, tile.x, tile.y);
+            try {
+                const existing = await db.get('tiles', key);
+                if (existing) {
+                    progress.bytes += existing.size;
+                } else {
+                    let ok = false;
+                    for (let attempt = 0; attempt <= retries; attempt += 1) {
+                        if (signal?.aborted) break;
+                        try {
+                            const response = await fetch(TILE_SOURCES[style].url(tile.z, tile.x, tile.y), { signal });
+                            if (!response.ok) throw new Error(String(response.status));
+                            const blob = await response.blob();
+                            await db.put('tiles', { key, regionId, blob, size: blob.size });
+                            progress.bytes += blob.size;
+                            ok = true;
+                            break;
+                        } catch {
+                            if (attempt < retries) {
+                                // backoff
+                                // eslint-disable-next-line no-await-in-loop
+                                await new Promise((r) => setTimeout(r, 200 * 2 ** attempt));
+                                continue;
+                            }
+                        }
+                    }
+                    if (!ok) progress.failed += 1;
+                }
+            } catch {
+                progress.failed += 1;
+            }
+            progress.completed += 1;
+            onProgress?.({ ...progress });
+        }
+    };
+
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    return progress;
 }
 
 export async function deleteRegion(regionId: string) {
