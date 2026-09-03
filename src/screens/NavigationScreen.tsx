@@ -143,6 +143,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                         containerRef.current.style.width = '100%';
                         containerRef.current.style.minHeight = '100dvh';
                         containerRef.current.style.height = '100dvh';
+                        try { (containerRef.current as HTMLElement).style.zIndex = '0'; } catch { }
                     }
                 } catch { }
 
@@ -161,10 +162,37 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     // also nudge map to redraw at the current center/zoom
                     try {
                         map.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
+                        try { (map.getContainer() as HTMLElement).style.zIndex = '0'; } catch { }
                     } catch { }
                 }, 250);
 
                 setMapReady(true);
+
+                // Verify the canvas was created and has non-zero size. If not, attempt
+                // a single automatic re-init (helps when some browsers compute 0x0 on
+                // first mount due to layout timing). We guard with `initAttempt` so
+                // we don't loop forever.
+                const verifyCanvas = () => {
+                    try {
+                        const c = map.getContainer().querySelector('canvas');
+                        const rect = c ? (c as HTMLElement).getBoundingClientRect() : null;
+                        if (!c || !rect || rect.width === 0 || rect.height === 0) {
+                            console.warn('Map canvas missing or zero-sized, retrying map init');
+                            try {
+                                map.remove();
+                            } catch { }
+                            mapRef.current = null;
+                            // bump initAttempt so the effect re-runs and rebuilds the map
+                            setInitAttempt((v) => v + 1);
+                        }
+                    } catch (e) {
+                        console.warn('Error verifying map canvas', e);
+                    }
+                };
+
+                // run verify shortly after load and once more after layout settles
+                window.setTimeout(verifyCanvas, 300);
+                window.setTimeout(verifyCanvas, 1000);
 
                 // Add window resize / orientation handlers to keep the canvas correct.
                 const onWindowResize = () => safeResize();
