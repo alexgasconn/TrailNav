@@ -118,20 +118,34 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
 
                 // Force a resize after load and again shortly after to ensure the canvas
                 // fills the container (fixes cases where only the lower part is visible).
-                try {
-                    map.resize();
-                } catch (e) {
-                    // ignore
-                }
-                window.setTimeout(() => {
+                const safeResize = () => {
                     try {
                         map.resize();
                     } catch (e) {
                         // ignore
                     }
-                }, 200);
+                };
+                safeResize();
+                const later = window.setTimeout(safeResize, 200);
 
                 setMapReady(true);
+
+                // Add window resize / orientation handlers to keep the canvas correct.
+                const onWindowResize = () => safeResize();
+                window.addEventListener('resize', onWindowResize);
+                window.addEventListener('orientationchange', onWindowResize);
+
+                // cleanup for the handlers when map is destroyed
+                map.on('remove', () => {
+                    window.removeEventListener('resize', onWindowResize);
+                    window.removeEventListener('orientationchange', onWindowResize);
+                });
+
+                // ensure we clear the timeout on unmount
+                const clearLater = () => window.clearTimeout(later);
+
+                // attach to local scope so cleanup in effect return can clear
+                (map as any).__trailnav_clearLater = clearLater;
             });
         });
 
@@ -140,7 +154,13 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
             poiMarkersRef.current.forEach((marker) => marker.remove());
             poiMarkersRef.current = [];
             userMarkerRef.current = null;
-            mapRef.current?.remove();
+            if (mapRef.current) {
+                try {
+                    const m = mapRef.current as any;
+                    if (m.__trailnav_clearLater) m.__trailnav_clearLater();
+                } catch {}
+                mapRef.current.remove();
+            }
             mapRef.current = null;
             setMapReady(false);
         };

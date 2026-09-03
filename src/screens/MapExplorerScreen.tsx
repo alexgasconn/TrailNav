@@ -91,6 +91,28 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
             if (route?.geoJson) {
                 map.fitBounds(turf.bbox(route.geoJson) as [number, number, number, number], { padding: 60, duration: 0 });
             }
+            // Ensure canvas is correctly sized (fix clipped map render on some devices)
+            try {
+                map.resize();
+            } catch {}
+            const later = window.setTimeout(() => {
+                try {
+                    map.resize();
+                } catch {}
+            }, 200);
+
+            const onWindowResize = () => {
+                try {
+                    map.resize();
+                } catch {}
+            };
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('orientationchange', onWindowResize);
+            map.on('remove', () => {
+                window.removeEventListener('resize', onWindowResize);
+                window.removeEventListener('orientationchange', onWindowResize);
+                window.clearTimeout(later);
+            });
         });
 
         return () => {
