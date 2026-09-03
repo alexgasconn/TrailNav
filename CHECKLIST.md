@@ -107,7 +107,7 @@
 
 - [ ] Optimizar HomeScreen styling (aplicar todos cambios)
 - [ ] Agregar offline maps download feature
-- [ ] Mejorar route analysis screen
+- [x] Mejorar route analysis screen: perfil, segmentos y ETA multimodelo
 - [ ] Agregar notificaciones push
 
 ### Medium Priority
@@ -139,6 +139,8 @@
 - [x] Updated index.css con mobile styles
 - [x] Creados componentes UI reutilizables
 - [x] Documentación completa escrita
+- [x] Motor local de analisis de elevacion y deteccion de segmentos
+- [x] ETA multimodelo con filtro mediana/MAD
 
 ### 📝 Pendiente (Opcional)
 

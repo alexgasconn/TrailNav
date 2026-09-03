@@ -1,6 +1,8 @@
-# 🎉 TrailNav v2.0 - ESTADO ACTUAL
+# TrailNav - Estado actual
 
-## ✅ Lo Que Ya Está HECHO y LISTO PARA USAR
+> El progreso verificable por feature se mantiene en [FEATURES_STATUS.md](FEATURES_STATUS.md).
+
+## ✅ Base funcional disponible
 
 ### 1. ✅ Optimizaciones Android/Mobile COMPLETADAS
 
@@ -52,7 +54,7 @@
 
 ---
 
-## 🚀 ESTADO: LISTO PARA DESARROLLAR
+## 🚧 ESTADO: MVP funcional en ampliacion
 
 **La aplicación está completamente optimizada y lista para:**
 
@@ -222,7 +224,7 @@ F12 → Sensors:
 ## 📊 Mejoras Implementadas
 
 | Métrica | Antes | Después |
-|---------|-------|---------|
+| --------- | ------- | --------- |
 | **Features** | GPS + Maps | GPS + Battery + Network + Orientation + Vibration |
 | **Offline** | Parcial | ✅ Completo (60+ días) |
 | **Mobile UI** | Básico | ✅ Profesional |

@@ -1,0 +1,2038 @@
+# Documento Unificado de Especificación de Producto — TrailNav
+
+## Visión general
+
+**TrailNav** es una aplicación móvil de navegación y análisis de rutas para actividades *outdoor*: senderismo, hiking, trail running, running, MTB, gravel y ciclismo de carretera.
+
+Su objetivo es combinar en una única aplicación:
+
+* Navegación GPS en vivo.
+* Funcionamiento prioritariamente offline.
+* Cartografía topográfica detallada.
+* Análisis avanzado de GPX/FIT/KML.
+* Perfil altimétrico sincronizado con la posición.
+* Detección automática de subidas y bajadas.
+* Análisis del terreno y la superficie.
+* Predicción meteorológica a lo largo de la ruta.
+* Un motor ETA multimodelo adaptado al rendimiento real del usuario.
+
+La filosofía central es que un usuario pueda preparar una ruta antes de salir, descargar o precargar toda la información necesaria y utilizar la aplicación durante horas en montaña sin depender de cobertura móvil.
+
+---
+
+# 1. Principios y filosofía del sistema
+
+## 1.1 Offline-First
+
+TrailNav se diseña bajo un modelo **Offline-First**.
+
+Una vez preparada una ruta y descargada la información necesaria, las funciones críticas deben funcionar sin conexión:
+
+* Visualización de mapas.
+* Posicionamiento GPS/GNSS.
+* Navegación sobre track.
+* Cálculo de distancia.
+* Perfil altimétrico.
+* Detección de subidas y bajadas.
+* ETA dinámico.
+* Análisis de superficie.
+* POIs.
+* Alertas de desvío.
+* Datos meteorológicos previamente almacenados.
+
+La conexión a Internet únicamente será necesaria para funciones de preparación:
+
+* Descarga de mapas detallados.
+* Consulta meteorológica.
+* Importación desde servicios externos.
+* Actualización de datos cartográficos.
+* Enriquecimiento opcional de información del terreno.
+
+---
+
+## 1.2 Modelo de licencia
+
+TrailNav se plantea como:
+
+* Open Source.
+* Gratuita.
+* Sin anuncios.
+* Sin compras *in-app* obligatorias.
+* Sin registro obligatorio.
+* Con almacenamiento local por defecto.
+
+La arquitectura debe permitir que la aplicación pueda ser compilada y utilizada sin depender de servicios propietarios críticos.
+
+---
+
+## 1.3 Principio de autonomía
+
+La aplicación debe poder utilizarse en escenarios como:
+
+* Pirineos sin cobertura.
+* Barrancos.
+* Bosques densos.
+* Rutas de varios días.
+* Actividades en zonas remotas.
+
+Por ello, el sistema debe minimizar dependencias externas durante la actividad.
+
+---
+
+# 2. Arquitectura general del sistema
+
+La arquitectura funcional de TrailNav se divide en los siguientes motores:
+
+```text
+                        ┌──────────────────────┐
+                        │     INPUT SOURCES    │
+                        │                      │
+                        │ GPX / FIT / KML      │
+                        │ GPS / GNSS           │
+                        │ DEM                  │
+                        │ OSM                  │
+                        │ Weather APIs         │
+                        └──────────┬───────────┘
+                                   │
+                                   ▼
+                     ┌───────────────────────────┐
+                     │     TRAILNAV CORE         │
+                     │                           │
+                     │ • Route Import Engine     │
+                     │ • Map Engine              │
+                     │ • Elevation Engine        │
+                     │ • Terrain Engine          │
+                     │ • Climb Detection         │
+                     │ • ETA Engine              │
+                     │ • Navigation Engine       │
+                     │ • Weather Cache           │
+                     └────────────┬──────────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              ▼                   ▼                   ▼
+      ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+      │ Local SQLite │    │ MBTiles /    │    │ Sensor Fusion│
+      │ Route Data   │    │ Vector Maps  │    │ GPS + IMU    │
+      └──────────────┘    └──────────────┘    └──────────────┘
+                                  │
+                                  ▼
+                     ┌───────────────────────────┐
+                     │      MOBILE UI            │
+                     │                           │
+                     │ Map                       │
+                     │ Navigation                │
+                     │ Elevation Profile         │
+                     │ Climbs & Descents         │
+                     │ ETA                       │
+                     │ Weather                   │
+                     └───────────────────────────┘
+```
+
+---
+
+# 3. Cartografía Offline
+
+## 3.1 Arquitectura cartográfica
+
+TrailNav utiliza una arquitectura basada en almacenamiento local:
+
+* SQLite.
+* MBTiles.
+* Vector Tiles.
+* DEM rasterizados.
+* Cachés locales.
+
+Los mapas deben renderizarse directamente en el dispositivo.
+
+Fuentes cartográficas compatibles:
+
+* OpenStreetMap.
+* OpenMapTiles.
+* OpenAndroMaps.
+* Natural Earth.
+* DEM SRTM.
+* NASADEM.
+
+---
+
+## 3.2 Cartografía global base integrada
+
+La aplicación puede incluir una cartografía global simplificada dentro del paquete base.
+
+Esta cartografía debe permitir:
+
+* Identificar continentes y regiones.
+* Visualizar carreteras principales.
+* Visualizar masas de agua.
+* Localizar grandes cadenas montañosas.
+* Mostrar ciudades principales.
+* Mostrar una elevación global básica.
+
+Para evitar que el tamaño de instalación sea excesivo, se propone una arquitectura de dos niveles.
+
+### Nivel 1: Mapa global base
+
+Incluido con la aplicación.
+
+Basado en:
+
+* Natural Earth.
+* OpenMapTiles simplificado.
+* DEM global de resolución reducida.
+
+### Nivel 2: Mapas regionales HD
+
+Descargables antes de la actividad.
+
+Ejemplos:
+
+* Cataluña.
+* Pirineos.
+* Alpes.
+* Dolomitas.
+* Sierra Nevada.
+
+Estos paquetes pueden contener:
+
+* Curvas de nivel.
+* OSM completo.
+* POIs.
+* DEM de alta resolución.
+* Hillshade.
+* Información de superficie.
+
+---
+
+## 3.3 Renderizado local
+
+El motor gráfico debe renderizar las capas localmente mediante:
+
+* OpenGL.
+* Vulkan cuando esté disponible.
+
+No debe depender de peticiones HTTP durante la navegación.
+
+---
+
+# 4. Capas cartográficas
+
+TrailNav debe soportar un sistema multicapa configurable.
+
+## 4.1 Capa topográfica
+
+Debe incluir:
+
+* Curvas de nivel.
+* Curvas principales y secundarias.
+* Etiquetas de altitud.
+* Picos.
+* Collados.
+* Valles.
+* Ríos.
+* Lagos.
+
+Configuración objetivo:
+
+* Curvas principales cada 50 m o 100 m.
+* Curvas secundarias cada 10 m en cartografía HD.
+
+---
+
+## 4.2 Hillshade
+
+Generado a partir de datos DEM.
+
+Debe proporcionar:
+
+* Sombreado del relieve.
+* Percepción visual de crestas.
+* Valles.
+* Pendientes pronunciadas.
+
+El usuario debe poder activar o desactivar esta capa.
+
+---
+
+## 4.3 Mapa de pendientes
+
+Capa superpuesta calculada a partir del DEM.
+
+Representación sugerida:
+
+| Pendiente | Representación        |
+| --------- | --------------------- |
+| 0°–15°    | Sin resaltar          |
+| 15°–25°   | Amarillo suave        |
+| 25°–30°   | Naranja               |
+| 30°–35°   | Rojo                  |
+| >35°      | Rojo intenso / oscuro |
+
+Esta capa puede ser especialmente útil para:
+
+* Terreno alpino.
+* Planificación de rutas.
+* Identificación de zonas expuestas.
+* Evaluación visual de corredores y laderas.
+
+La capa no debe presentarse como una predicción automática de avalanchas. Solo representa la inclinación geométrica del terreno.
+
+---
+
+## 4.4 Capa de superficie
+
+El mapa debe representar visualmente el tipo de firme.
+
+Datos obtenidos principalmente de OpenStreetMap:
+
+* `surface=*`
+* `tracktype=*`
+* `sac_scale=*`
+* `mtb:scale=*`
+
+Tipos visuales:
+
+| Superficie      | Ejemplos       |
+| --------------- | -------------- |
+| Asfalto         | paved, asphalt |
+| Hormigón        | concrete       |
+| Grava           | gravel         |
+| Tierra          | dirt           |
+| Sendero         | ground         |
+| Piedra          | rock           |
+| Hierba          | grass          |
+| Arena           | sand           |
+| Terreno técnico | alpine_hiking  |
+| Vía ferrata     | ferrata        |
+
+La representación puede utilizar:
+
+* Texturas.
+* Patrones.
+* Iconografía.
+* Colores discretos.
+
+---
+
+## 4.5 Escala técnica del sendero
+
+TrailNav debe interpretar `sac_scale`.
+
+| OSM `sac_scale`           | Interpretación        |
+| ------------------------- | --------------------- |
+| hiking                    | Senderismo sencillo   |
+| mountain_hiking           | Senderismo de montaña |
+| demanding_mountain_hiking | Terreno exigente      |
+| alpine_hiking             | Terreno alpino        |
+
+---
+
+## 4.6 Escala MTB
+
+Interpretación de:
+
+```text
+mtb:scale = S0 → S5
+```
+
+Esto permitirá identificar automáticamente:
+
+* Pistas fáciles.
+* Singletracks.
+* Terreno técnico.
+* Descensos difíciles.
+
+---
+
+# 5. Puntos de interés offline
+
+La base cartográfica debe incluir POIs relevantes para actividades outdoor.
+
+Categorías:
+
+### Agua
+
+* Fuentes.
+* Agua potable.
+* Manantiales.
+* Ríos.
+
+### Montaña
+
+* Cumbres.
+* Collados.
+* Pasos.
+* Miradores.
+
+### Seguridad
+
+* Refugios.
+* Refugios libres.
+* Campings.
+* Parkings.
+* Carreteras de acceso.
+
+### Navegación
+
+* Cruces importantes.
+* Puentes.
+* Pasos complicados.
+
+Cada POI debe poder mostrar:
+
+```text
+Nombre
+Tipo
+Coordenadas
+Altitud
+Distancia desde posición actual
+Distancia restante por ruta
+```
+
+---
+
+# 6. Motor de importación de rutas
+
+TrailNav debe soportar inicialmente:
+
+* `.gpx`
+* `.fit`
+* `.kml`
+
+La arquitectura debe permitir añadir posteriormente:
+
+* TCX.
+* GeoJSON.
+* Shapefile convertido.
+
+---
+
+## 6.1 Pipeline de importación
+
+```text
+[ Archivo ]
+     │
+     ▼
+[ Parser específico ]
+     │
+     ▼
+[ Normalización ]
+     │
+     ├── Latitud
+     ├── Longitud
+     ├── Elevación
+     ├── Timestamp
+     └── Metadatos
+     │
+     ▼
+[ Route Data Model ]
+     │
+     ├── Simplificación
+     ├── Suavizado altitud
+     ├── Cálculo distancia
+     ├── Cálculo pendiente
+     ├── Climb Detection
+     ├── ETA Segmentation
+     └── Terrain Analysis
+```
+
+---
+
+## 6.2 Modelo interno de punto
+
+Cada punto de ruta debe poder contener:
+
+```text
+RoutePoint {
+    latitude
+    longitude
+    elevation
+    timestamp
+
+    cumulativeDistance
+
+    localSlope
+    smoothedSlope
+
+    terrainType
+    surfaceType
+
+    cumulativeAscent
+    cumulativeDescent
+}
+```
+
+---
+
+# 7. Procesamiento altimétrico
+
+Los datos de elevación de GPX pueden contener ruido.
+
+Antes del análisis deben aplicarse procesos de limpieza.
+
+## 7.1 Fuentes de elevación
+
+Prioridad configurable:
+
+1. Altitud DEM.
+2. Altitud barométrica.
+3. Altitud GPX.
+4. Altitud GPS.
+
+---
+
+## 7.2 Suavizado
+
+El sistema debe evitar que pequeñas fluctuaciones generen falsos desniveles acumulados.
+
+Se recomienda:
+
+* Moving average.
+* Savitzky-Golay.
+* Filtro adaptativo según densidad de puntos.
+
+Debe conservarse el perfil real evitando eliminar cambios bruscos relevantes.
+
+---
+
+## 7.3 Cálculo de pendiente
+
+Para cada segmento:
+
+$$
+Slope(\%) =
+\frac{\Delta elevation}{\Delta horizontalDistance}
+\times 100
+$$
+
+Para evitar ruido, la pendiente visual debe calcularse sobre una ventana mínima configurable.
+
+Ejemplo:
+
+* 20 m para trail.
+* 50 m para senderismo.
+* 100 m para carretera.
+
+---
+
+# 8. Coloreado dinámico del track
+
+La ruta debe visualizarse según pendiente.
+
+## Subidas
+
+| Pendiente | Color conceptual |
+| --------- | ---------------- |
+| 0–4%      | Verde            |
+| 5–9%      | Amarillo         |
+| 10–15%    | Naranja          |
+| 16–25%    | Rojo             |
+| >25%      | Morado / negro   |
+
+## Descensos
+
+Se utiliza una escala azul.
+
+| Descenso   | Intensidad   |
+| ---------- | ------------ |
+| 0 a -5%    | Azul claro   |
+| -5 a -15%  | Azul         |
+| -15 a -25% | Azul intenso |
+| < -25%     | Azul oscuro  |
+
+El track puede dividirse internamente en segmentos homogéneos:
+
+```text
+Segment {
+    startPoint
+    endPoint
+    distance
+    elevationDelta
+    slope
+    color
+}
+```
+
+---
+
+# 9. Perfil altimétrico interactivo
+
+El perfil altimétrico es uno de los componentes principales de TrailNav.
+
+Debe mostrar:
+
+* Distancia total.
+* Elevación.
+* Subidas.
+* Bajadas.
+* Posición actual.
+* Próximas subidas.
+* POIs.
+
+---
+
+## 9.1 Sincronización GPS-perfil
+
+Cuando el usuario avanza:
+
+```text
+GPS Position
+      │
+      ▼
+Map Matching
+      │
+      ▼
+Route Distance Position
+      │
+      ▼
+Elevation Profile Cursor
+```
+
+El marcador de la gráfica debe desplazarse simultáneamente.
+
+Ejemplo:
+
+```text
+ALTITUD
+  ↑
+1800m              /\ 
+                  /  \
+1500m        /\   /    \__
+            /  \_/         \
+1200m _____/                \____
+
+       ─────────●───────────────
+                ↑
+          Posición actual
+
+──────────────────────────────────→ Distancia
+```
+
+---
+
+## 9.2 Interacción bidireccional
+
+El usuario debe poder tocar el perfil.
+
+Al seleccionar un punto:
+
+* El mapa se centra en esa posición.
+* Se muestra distancia.
+* Se muestra altitud.
+* Se muestra pendiente.
+* Se muestra información del terreno.
+
+---
+
+# 10. Climb & Descent Detection Engine
+
+TrailNav debe detectar automáticamente subidas y bajadas significativas.
+
+El análisis no debe limitarse a buscar segmentos consecutivos positivos, ya que pequeñas bajadas dentro de una ascensión no deben dividir artificialmente un puerto.
+
+---
+
+## 10.1 Pipeline de detección
+
+```text
+Raw Elevation Profile
+        │
+        ▼
+Elevation Smoothing
+        │
+        ▼
+Micro-undulation filtering
+        │
+        ▼
+Candidate Segments
+        │
+        ├── Ascents
+        └── Descents
+        │
+        ▼
+Merge interruptions
+        │
+        ▼
+Difficulty Classification
+        │
+        ▼
+Climb / Descent Database
+```
+
+---
+
+## 10.2 Criterios configurables
+
+Cada modalidad puede tener parámetros distintos.
+
+### Ciclismo
+
+Una subida puede requerir:
+
+* Distancia mínima.
+* Desnivel mínimo.
+* Pendiente media mínima.
+
+### Trail Running
+
+Se pueden detectar ascensiones más cortas.
+
+### Senderismo
+
+El algoritmo debe priorizar cambios relevantes de elevación incluso con pendientes moderadas.
+
+---
+
+## 10.3 Ficha de subida
+
+Cada subida detectada debe contener:
+
+```text
+Nombre automático o geográfico
+Distancia
+Desnivel positivo
+Pendiente media
+Pendiente máxima
+Altitud inicio
+Altitud cima
+Distancia hasta inicio
+Distancia restante hasta coronar
+Tiempo estimado
+Dificultad
+```
+
+Ejemplo:
+
+```text
+PUERTO 3
+
+Distancia:          4.8 km
+Desnivel:           +620 m
+Pendiente media:    12.9%
+Pendiente máxima:   28%
+Inicio:             1,240 m
+Cima:               1,860 m
+
+Distancia hasta cima: 2.1 km
+ETA cima:             32 min
+```
+
+---
+
+## 10.4 Categorización
+
+Para ciclismo puede utilizarse un sistema:
+
+* Cat 4.
+* Cat 3.
+* Cat 2.
+* Cat 1.
+* HC.
+
+La fórmula exacta debe estar desacoplada para poder modificarla.
+
+Una aproximación inicial puede utilizar un índice:
+
+$$
+DifficultyScore =
+Distance_{km}
+\times
+AverageGradient
+$$
+
+Posteriormente pueden incorporarse:
+
+* Desnivel total.
+* Pendiente máxima.
+* Altitud.
+* Rugosidad.
+
+---
+
+## 10.5 Bajadas
+
+Cada descenso debe contener:
+
+```text
+Distancia
+Desnivel negativo
+Pendiente media
+Pendiente máxima negativa
+Tipo de superficie
+Dificultad técnica
+```
+
+Para MTB y trail, la dificultad no debe depender exclusivamente de la pendiente.
+
+Debe incorporar cuando sea posible:
+
+* `surface`.
+* `mtb:scale`.
+* `sac_scale`.
+
+---
+
+# 11. Navegación GPS y posicionamiento
+
+## 11.1 GNSS
+
+TrailNav debe utilizar directamente los sensores disponibles:
+
+* GPS.
+* Galileo.
+* GLONASS.
+* BeiDou cuando el dispositivo lo soporte.
+
+Datos capturados:
+
+```text
+Latitude
+Longitude
+Altitude
+Horizontal accuracy
+Vertical accuracy
+Speed
+Bearing
+Timestamp
+```
+
+---
+
+## 11.2 Fusión de sensores
+
+El posicionamiento puede combinar:
+
+* GNSS.
+* Acelerómetro.
+* Giroscopio.
+* Magnetómetro.
+* Altímetro barométrico.
+
+Arquitectura:
+
+```text
+GPS/GNSS ────────┐
+                 │
+Accelerometer ───┤
+                 ▼
+Gyroscope ───────┤
+            Sensor Fusion
+Magnetometer ────┤
+                 │
+Barometer ───────┘
+                 ▼
+          Kalman Filter
+                 │
+                 ▼
+        Filtered Position
+```
+
+---
+
+## 11.3 Filtro Kalman
+
+El objetivo es reducir:
+
+* Saltos GPS.
+* Oscilaciones.
+* Ruido bajo bosque.
+* Errores en cañones.
+* Variaciones instantáneas de velocidad.
+
+El filtro no debe introducir retraso perceptible en navegación.
+
+---
+
+# 12. Orientación y brújula
+
+TrailNav debe soportar dos modos principales.
+
+## North-Up
+
+El norte permanece fijo.
+
+Ventajas:
+
+* Mayor estabilidad visual.
+* Mejor lectura cartográfica.
+
+## Heading-Up
+
+El mapa rota según la orientación del usuario.
+
+Debe combinar:
+
+* Magnetómetro.
+* Giroscopio.
+* Acelerómetro.
+
+La orientación debe funcionar incluso estando parado.
+
+Se utilizarán los componentes:
+
+```text
+Yaw
+Pitch
+Roll
+```
+
+para calcular la orientación del dispositivo.
+
+---
+
+# 13. Map Matching
+
+El GPS nunca coincide exactamente con el track.
+
+TrailNav debe implementar un sistema de proyección sobre la polilínea.
+
+```text
+GPS Position
+      │
+      ▼
+Nearest Route Segment
+      │
+      ▼
+Projected Position
+      │
+      ▼
+Distance Along Route
+```
+
+Esto permite calcular correctamente:
+
+* Distancia recorrida.
+* Distancia restante.
+* Posición en perfil.
+* Próxima subida.
+* ETA.
+
+---
+
+# 14. Detección de desvío
+
+La aplicación debe calcular la distancia entre el usuario y la ruta.
+
+Estados:
+
+| Distancia | Estado            |
+| --------- | ----------------- |
+| <10 m     | En ruta           |
+| 10–20 m   | Atención          |
+| >20 m     | Posible desvío    |
+| >50 m     | Desvío confirmado |
+
+Los valores deben ser configurables según actividad.
+
+Ejemplo:
+
+* Trail: tolerancia mayor.
+* Ciclismo carretera: tolerancia menor.
+
+---
+
+## 14.1 Alertas
+
+Al detectar desvío:
+
+* Vibración.
+* Sonido.
+* Notificación visual.
+
+Debe evitar alertas repetitivas mediante:
+
+* Cooldown temporal.
+* Confirmación de persistencia.
+* Histéresis.
+
+---
+
+# 15. Navegación basada en cambios de rumbo
+
+TrailNav no necesita inicialmente un motor completo de *turn-by-turn routing*.
+
+Puede detectar maniobras a partir de la geometría del track.
+
+```text
+Segment A bearing
+        │
+        ▼
+Angle Difference
+        │
+        ▼
+Segment B bearing
+        │
+        ▼
+Significant turn?
+```
+
+Ejemplo:
+
+| Cambio de rumbo | Evento           |
+| --------------- | ---------------- |
+| <20°            | Continuar        |
+| 20–45°          | Giro suave       |
+| 45–100°         | Girar            |
+| >100°           | Giro pronunciado |
+
+---
+
+# 16. Motor ETA multimodelo
+
+Este es uno de los componentes diferenciales de TrailNav.
+
+En lugar de depender exclusivamente de velocidad media:
+
+```text
+ETA = distancia restante / velocidad media
+```
+
+TrailNav ejecutará varios modelos en paralelo.
+
+---
+
+# 17. Algoritmos de estimación
+
+## 17.1 Naismith's Rule
+
+$$
+t =
+\frac{d}{5}
++
+\frac{\Delta h_{up}}{600}
+$$
+
+Donde:
+
+* $d$: distancia en km.
+* $5$: velocidad base aproximada km/h.
+* $\Delta h$: desnivel positivo en metros.
+
+Debe adaptarse según modalidad.
+
+---
+
+## 17.2 Tobler Hiking Function
+
+$$
+v =
+6 \cdot
+e^{-3.5
+\cdot
+|\tan(\theta)+0.05|}
+$$
+
+La función permite estimar una velocidad teórica según pendiente.
+
+El modelo debe aplicarse por segmentos.
+
+```text
+Route
+ │
+ ├── Segment 1 → slope → Tobler velocity
+ ├── Segment 2 → slope → Tobler velocity
+ ├── Segment 3 → slope → Tobler velocity
+ │
+ ▼
+Total ETA
+```
+
+---
+
+## 17.3 Munter Method
+
+Forma general:
+
+$$
+Time =
+\frac{
+DistanceEquivalent
+}{
+MunterFactor
+}
+$$
+
+La distancia equivalente incorpora desnivel:
+
+$$
+DistanceEquivalent =
+d +
+\frac{\Delta h}{100}
+$$
+
+El factor debe depender de:
+
+* Actividad.
+* Nivel del usuario.
+
+---
+
+## 17.4 Swiss Standard
+
+Modelo basado en combinación de tiempo horizontal y vertical:
+
+$$
+t =
+\max(
+t_{horizontal},
+t_{vertical}
+)
++
+\frac{1}{2}
+\min(
+t_{horizontal},
+t_{vertical}
+)
+$$
+
+Permite combinar ambos componentes evitando una simple suma lineal.
+
+---
+
+## 17.5 Petzoldt Energy Method
+
+Modelo energético.
+
+Su objetivo es estimar:
+
+* Coste energético horizontal.
+* Coste energético vertical.
+* Equivalencia metabólica.
+
+La implementación debe ser modular, permitiendo modificar posteriormente la función energética.
+
+---
+
+# 18. Consenso multimodelo
+
+Los cinco modelos deben ejecutarse en paralelo.
+
+```text
+                     ROUTE
+                       │
+         ┌─────────────┼─────────────┐
+         ▼             ▼             ▼
+      Naismith       Tobler       Munter
+         │             │             │
+         └──────┬──────┴──────┬──────┘
+                │             │
+              Swiss       Petzoldt
+                │             │
+                └──────┬──────┘
+                       ▼
+              Statistical Filter
+                       │
+                       ▼
+               User Adaptation
+                       │
+                       ▼
+                   FINAL ETA
+```
+
+---
+
+# 19. Filtrado estadístico de modelos
+
+Los modelos pueden producir valores inconsistentes.
+
+Se utilizará:
+
+* Mediana.
+* MAD (*Median Absolute Deviation*).
+
+Pipeline:
+
+```text
+ETA Results
+     │
+     ▼
+Median
+     │
+     ▼
+MAD Calculation
+     │
+     ▼
+Outlier Detection
+     │
+     ├── Outlier → Remove
+     │
+     └── Valid → Keep
+              │
+              ▼
+       Consensus ETA
+```
+
+Criterio configurable:
+
+```text
+Si desviación > threshold × MAD
+→ modelo descartado
+```
+
+Inicialmente:
+
+```text
+threshold ≈ 1.5
+```
+
+El sistema debe evitar depender de desviación estándar clásica, ya que con solo cinco modelos puede ser sensible a valores extremos.
+
+---
+
+# 20. Adaptación al usuario
+
+Los modelos teóricos no conocen:
+
+* Estado físico.
+* Fatiga.
+* Experiencia.
+* Peso transportado.
+* Terreno real.
+* Condiciones meteorológicas.
+
+Por ello, TrailNav debe calcular un factor individual.
+
+---
+
+## 20.1 Factor K
+
+Durante la actividad:
+
+$$
+K =
+\frac{
+Performance_{real}
+}{
+Performance_{predicted}
+}
+$$
+
+La implementación debe cuidar la dirección matemática.
+
+Una formulación clara es trabajar directamente con tiempos:
+
+$$
+K_t =
+\frac{
+Time_{real}
+}{
+Time_{predicted}
+}
+$$
+
+Entonces:
+
+$$
+ETA_{adjusted}
+=
+ETA_{model}
+\times K_t
+$$
+
+Interpretación:
+
+* $K_t > 1$: usuario más lento que el modelo.
+* $K_t < 1$: usuario más rápido.
+
+---
+
+## 20.2 Ventana temporal
+
+El cálculo debe utilizar una ventana móvil.
+
+Configuración inicial:
+
+```text
+15–20 minutos
+```
+
+Pero no debe usar únicamente velocidad media.
+
+Debe analizar:
+
+* Pendiente actual.
+* Tipo de terreno.
+* Modalidad.
+
+Ejemplo:
+
+```text
+Últimos 20 minutos:
+
++800 m/h subida
+5 km/h llano
+-1200 m/h descenso
+```
+
+Esto permite crear factores específicos.
+
+---
+
+## 20.3 Adaptación por tipo de pendiente
+
+Idealmente:
+
+```text
+K_flat
+K_uphill
+K_downhill
+```
+
+De esta manera, un usuario puede ser:
+
+* Muy rápido subiendo.
+* Normal en llano.
+* Lento bajando.
+
+El ETA restante se calcula segmentando la ruta.
+
+```text
+Remaining Route
+
+├── Flat ETA × K_flat
+├── Uphill ETA × K_uphill
+└── Downhill ETA × K_downhill
+
+              │
+              ▼
+           TOTAL ETA
+```
+
+---
+
+# 21. Perfiles de actividad
+
+El usuario debe seleccionar una modalidad.
+
+Inicialmente:
+
+* Senderismo.
+* Hiking.
+* Running.
+* Trail Running.
+* MTB.
+* Gravel.
+* Carretera.
+
+Cada perfil debe modificar:
+
+* Algoritmo ETA.
+* Parámetros de detección de subida.
+* Tolerancia de desvío.
+* Ventana de suavizado.
+* Peso del terreno.
+* Velocidad esperada.
+
+Ejemplo conceptual:
+
+| Actividad | Principal factor               |
+| --------- | ------------------------------ |
+| Hiking    | Pendiente                      |
+| Trail     | Pendiente + terreno            |
+| Road      | Pendiente + potencia/velocidad |
+| MTB       | Pendiente + dificultad técnica |
+| Gravel    | Pendiente + superficie         |
+| Running   | Pendiente + fatiga             |
+
+---
+
+# 22. Análisis del terreno
+
+TrailNav debe enriquecer cada segmento con información de superficie.
+
+Ejemplo:
+
+```text
+Route Segment
+
+0.0–2.4 km
+surface = asphalt
+
+2.4–6.1 km
+surface = gravel
+
+6.1–8.7 km
+surface = dirt
+
+8.7–10.2 km
+sac_scale = mountain_hiking
+```
+
+Esto permite modificar el ETA.
+
+Ejemplo conceptual:
+
+```text
+Theoretical Speed
+      ×
+Slope Factor
+      ×
+Surface Factor
+      ×
+Technical Difficulty
+      =
+Adjusted Segment Speed
+```
+
+---
+
+# 23. Enriquecimiento externo pre-ruta
+
+Cuando exista conexión, TrailNav puede enriquecer la ruta mediante:
+
+* Overpass API.
+* Datos OSM adicionales.
+* Mapbox Tilequery, si el usuario configura dicho proveedor.
+
+El proceso debe realizarse antes de comenzar la actividad.
+
+```text
+GPX
+ │
+ ▼
+Route Segmentation
+ │
+ ▼
+OSM / Overpass Queries
+ │
+ ▼
+Surface Extraction
+ │
+ ▼
+Local Route Database
+ │
+ ▼
+Offline Activity
+```
+
+---
+
+# 24. Weather Along the Route
+
+La meteorología debe analizarse espacial y temporalmente.
+
+No basta con consultar:
+
+```text
+Weather(start point)
+```
+
+TrailNav debe calcular:
+
+$$
+(X,Y,Z,t)
+$$
+
+para distintos puntos de la ruta.
+
+---
+
+# 25. Pipeline meteorológico
+
+```text
+GPX Route
+     │
+     ▼
+ETA Pre-calculation
+     │
+     ▼
+Temporal Route Sampling
+     │
+     ├── Hour 1
+     ├── Hour 2
+     ├── Hour 3
+     └── ...
+     │
+     ▼
+Coordinates + Expected Arrival Time
+     │
+     ▼
+Weather API
+     │
+     ▼
+Local Cache
+     │
+     ▼
+Offline Weather Timeline
+```
+
+---
+
+## 25.1 Ejemplo
+
+```text
+START
+10:00
+
+Km 0
+41.3800, 2.1700
+Alt: 250m
+
+ETA arrival:
+10:00
+
+──────────────
+
+Km 5
+41.4000, 2.1900
+Alt: 800m
+
+ETA arrival:
+11:15
+
+──────────────
+
+Km 11
+41.4200, 2.2200
+Alt: 1,650m
+
+ETA arrival:
+13:30
+```
+
+La aplicación consulta el tiempo previsto para:
+
+```text
+Coordenada
++
+Hora estimada de llegada
+```
+
+---
+
+# 26. Datos meteorológicos
+
+Variables almacenadas:
+
+* Temperatura.
+* Temperatura aparente.
+* Nubosidad.
+* Precipitación.
+* Probabilidad de precipitación.
+* Nieve cuando esté disponible.
+* Velocidad del viento.
+* Dirección.
+* Rachas.
+* Presión atmosférica.
+
+---
+
+# 27. Proveedores meteorológicos
+
+Proveedor preferente:
+
+[Open-Meteo](https://open-meteo.com/?utm_source=chatgpt.com)
+
+Alternativa configurable:
+
+[OpenWeather](https://openweathermap.org/?utm_source=chatgpt.com)
+
+La arquitectura debe utilizar una interfaz común:
+
+```text
+WeatherProvider
+
+getForecast(
+    latitude,
+    longitude,
+    datetime
+)
+```
+
+Esto permite sustituir el proveedor sin modificar el resto de la aplicación.
+
+---
+
+# 28. Caché meteorológica
+
+Antes de iniciar la actividad:
+
+```text
+[ User presses START ]
+         │
+         ▼
+[ Internet available? ]
+         │
+      YES│
+         ▼
+[ Download weather timeline ]
+         │
+         ▼
+[ Store SQLite cache ]
+         │
+         ▼
+[ Start Offline Activity ]
+```
+
+Durante la actividad:
+
+```text
+Internet unavailable
+        │
+        ▼
+Local Weather Cache
+        │
+        ▼
+Weather predictions by
+route position + time
+```
+
+---
+
+# 29. Motor de navegación en vivo
+
+La pantalla principal debe concentrar toda la información crítica.
+
+Arquitectura visual:
+
+```text
+┌────────────────────────────────────┐
+│ ← Próxima maniobra                 │
+│    En 120 m gira a la derecha      │
+├────────────────────────────────────┤
+│                                    │
+│                                    │
+│              MAPA                  │
+│                                    │
+│                 ●                  │
+│              Usuario               │
+│                                    │
+├────────────────────────────────────┤
+│ Vel.     Alt.      Dist.    ETA     │
+│ 5.2      1,840m    8.3km    14:32   │
+│ km/h               restantes       │
+├────────────────────────────────────┤
+│                                    │
+│        PERFIL ALTIMÉTRICO          │
+│             /\                     │
+│      ______/  \____                 │
+│             ●                       │
+└────────────────────────────────────┘
+```
+
+---
+
+# 30. Data Fields
+
+Configurables por el usuario.
+
+Campos iniciales:
+
+### Movimiento
+
+* Velocidad actual.
+* Velocidad media.
+* Tiempo total.
+* Tiempo en movimiento.
+
+### Distancia
+
+* Distancia recorrida.
+* Distancia restante.
+* Porcentaje completado.
+
+### Elevación
+
+* Altitud actual.
+* Ascenso acumulado.
+* Descenso acumulado.
+* Ascenso restante.
+* Descenso restante.
+
+### Navegación
+
+* Distancia hasta siguiente giro.
+* Distancia hasta destino.
+* Dirección.
+
+### Tiempo
+
+* ETA.
+* Tiempo restante.
+* Hora estimada de llegada a próxima cima.
+
+---
+
+# 31. Panel inferior modular
+
+El usuario debe poder reorganizar campos.
+
+Ejemplo:
+
+```text
+┌──────────┬──────────┬──────────┐
+│ ALTITUD  │  DIST    │   ETA    │
+│  1,850m  │  8.2km   │  14:35   │
+├──────────┼──────────┼──────────┤
+│ +D       │ SPEED    │ TIME MOV │
+│ +1,240m  │  5.2km/h │  2:12    │
+└──────────┴──────────┴──────────┘
+```
+
+---
+
+# 32. Pantalla de Climb & Descents
+
+Accesible desde el perfil altimétrico.
+
+Ejemplo:
+
+```text
+ROUTE ANALYSIS
+
+▲ Climb 1
+2.4 km · +340 m
+14.1%
+ETA: 28 min
+
+▼ Descent 1
+1.8 km · -280 m
+-15.5%
+
+▲ Climb 2
+5.1 km · +780 m
+15.3%
+ETA: 58 min
+
+● FINISH
+```
+
+La subida actual debe destacarse automáticamente.
+
+---
+
+# 33. Estado de actividad
+
+Durante una navegación activa:
+
+```text
+ActivitySession
+
+{
+    routeId
+
+    startTime
+
+    currentGPSPosition
+
+    matchedRouteDistance
+
+    currentAltitude
+
+    ascentAccumulated
+
+    descentAccumulated
+
+    movingTime
+
+    elapsedTime
+
+    userPerformanceModel
+
+    currentETA
+
+    offRouteStatus
+}
+```
+
+---
+
+# 34. Almacenamiento local
+
+La arquitectura puede utilizar SQLite como base principal.
+
+Tablas conceptuales:
+
+```text
+routes
+route_points
+route_segments
+climbs
+descents
+pois
+weather_cache
+activities
+activity_points
+map_metadata
+```
+
+---
+
+# 35. Estructura de datos
+
+## Route
+
+```text
+Route
+├── metadata
+├── geometry
+├── elevation_profile
+├── climbs
+├── descents
+├── terrain_segments
+├── pois
+└── weather_timeline
+```
+
+---
+
+# 36. Pipeline completo de preparación de ruta
+
+```text
+                [ IMPORT GPX/FIT/KML ]
+                          │
+                          ▼
+                  [ Parse Route ]
+                          │
+                          ▼
+                 [ Clean Geometry ]
+                          │
+                          ▼
+                 [ Elevation Engine ]
+                   │              │
+                   ▼              ▼
+             [ DEM Data ]   [ GPX Elevation ]
+                   │              │
+                   └──────┬───────┘
+                          ▼
+                 [ Smoothed Profile ]
+                          │
+          ┌───────────────┼────────────────┐
+          ▼               ▼                ▼
+   Gradient Analysis   Climb Detection   Terrain Analysis
+          │               │                │
+          └───────────────┼────────────────┘
+                          ▼
+                    ETA MODELS
+                          │
+                          ▼
+                WEATHER PRELOAD
+                          │
+                          ▼
+                  LOCAL DATABASE
+                          │
+                          ▼
+                 READY FOR OFFLINE
+```
+
+---
+
+# 37. Pipeline durante navegación
+
+```text
+GPS / GNSS
+    │
+    ▼
+Sensor Fusion
+    │
+    ▼
+Kalman Filter
+    │
+    ▼
+Map Matching
+    │
+    ├── Current Route Position
+    │
+    ├── Elevation Profile Cursor
+    │
+    ├── Distance Remaining
+    │
+    ├── Current Climb
+    │
+    └── Off-route Detection
+             │
+             ▼
+      User Performance Model
+             │
+             ▼
+         Dynamic ETA
+             │
+             ▼
+        LIVE UI UPDATE
+```
+
+---
+
+# 38. Arquitectura de motores
+
+La aplicación debe desacoplar sus componentes.
+
+```text
+TrailNavCore
+
+├── MapEngine
+│   ├── VectorRenderer
+│   ├── DEMRenderer
+│   └── LayerManager
+│
+├── RouteEngine
+│   ├── GPXParser
+│   ├── FITParser
+│   ├── KMLParser
+│   └── RouteNormalizer
+│
+├── ElevationEngine
+│   ├── DEMProvider
+│   ├── Smoothing
+│   └── GradientCalculator
+│
+├── TerrainEngine
+│   ├── OSMTagParser
+│   ├── SurfaceClassifier
+│   └── DifficultyClassifier
+│
+├── ClimbEngine
+│   ├── AscentDetector
+│   ├── DescentDetector
+│   └── DifficultyScorer
+│
+├── ETAEngine
+│   ├── NaismithModel
+│   ├── ToblerModel
+│   ├── MunterModel
+│   ├── SwissModel
+│   ├── PetzoldtModel
+│   ├── OutlierFilter
+│   └── UserAdaptation
+│
+├── NavigationEngine
+│   ├── MapMatching
+│   ├── OffRouteDetection
+│   └── TurnDetection
+│
+└── WeatherEngine
+    ├── ProviderInterface
+    ├── ForecastDownloader
+    └── OfflineCache
+```
+
+---
+
+# 39. Requisitos funcionales principales
+
+## RF-01 — Importación
+
+La aplicación debe importar GPX, FIT y KML.
+
+## RF-02 — Offline
+
+La navegación debe funcionar sin Internet tras preparar la ruta.
+
+## RF-03 — Mapas
+
+Debe mostrar mapas vectoriales locales.
+
+## RF-04 — DEM
+
+Debe permitir visualizar elevación y curvas de nivel.
+
+## RF-05 — Track gradient
+
+El track debe colorearse según pendiente.
+
+## RF-06 — Elevation profile
+
+Debe mostrar un perfil sincronizado con la posición.
+
+## RF-07 — Climbs
+
+Debe detectar automáticamente subidas.
+
+## RF-08 — Descents
+
+Debe detectar automáticamente bajadas.
+
+## RF-09 — ETA
+
+Debe calcular ETA mediante múltiples modelos.
+
+## RF-10 — Adaptación
+
+El ETA debe adaptarse al rendimiento real del usuario.
+
+## RF-11 — Terrain
+
+Debe identificar superficie y dificultad cuando existan datos.
+
+## RF-12 — Weather
+
+Debe permitir precargar meteorología a lo largo de la ruta.
+
+## RF-13 — Navigation
+
+Debe detectar desvíos.
+
+## RF-14 — Alerts
+
+Debe emitir alertas visuales, sonoras o hápticas.
+
+## RF-15 — Heading
+
+Debe soportar North-Up y Heading-Up.
+
+---
+
+# 40. Diferenciadores principales de TrailNav
+
+TrailNav no pretende ser únicamente un visor de GPX.
+
+Su propuesta diferencial se basa en unir cinco sistemas normalmente separados:
+
+### 1. Navegación offline real
+
+No depender de cobertura durante la actividad.
+
+### 2. Lectura avanzada del perfil
+
+No solo mostrar una gráfica, sino entender la estructura de la ruta.
+
+### 3. ETA multimodelo
+
+Combinar distintos modelos matemáticos y adaptarlos al usuario.
+
+### 4. Comprensión del terreno
+
+Incorporar pendiente, superficie y dificultad técnica.
+
+### 5. Meteorología espacio-temporal
+
+Mostrar el tiempo previsto donde estará el usuario y cuando llegue allí.
+
+---
+
+# 41. Visión final del producto
+
+```text
+                         TRAILNAV
+                            │
+       ┌────────────────────┼────────────────────┐
+       │                    │                    │
+       ▼                    ▼                    ▼
+   OFFLINE MAPS         SMART ROUTE          LIVE GPS
+       │                    │                    │
+       ▼                    ▼                    ▼
+   TOPOGRAPHY          CLIMB ENGINE       SENSOR FUSION
+       │                    │                    │
+       └────────────┬───────┴────────────┬───────┘
+                    │                    │
+                    ▼                    ▼
+             TERRAIN ANALYSIS       ELEVATION PROFILE
+                    │                    │
+                    └────────┬───────────┘
+                             ▼
+                      MULTI-MODEL ETA
+                             │
+              ┌──────────────┼──────────────┐
+              ▼                             ▼
+       USER PERFORMANCE             WEATHER TIMELINE
+              │                             │
+              └──────────────┬──────────────┘
+                             ▼
+                    LIVE NAVIGATION
+                             │
+                             ▼
+                      OFFLINE OUTDOOR
+```
+
+## Concepto resumido
+
+**TrailNav es un navegador outdoor offline que no solo te dice dónde estás, sino que interpreta lo que queda por delante: qué subida viene, cuánto terreno técnico queda, cuánto tardarás realmente según tu ritmo y qué condiciones meteorológicas tendrás cuando llegues a cada punto de la ruta.**
