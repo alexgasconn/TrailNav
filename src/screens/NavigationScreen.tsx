@@ -29,6 +29,9 @@ import {
     formatTimeOfDay,
 } from '../lib/format';
 import ProfileChart from '../components/ProfileChart';
+import InfoWindows from '../components/InfoWindows';
+import { RouteWeatherPanel } from '../components/RouteWeatherPanel';
+import { sampleProfile, indexAtDistance } from '../lib/routeProfile';
 
 export function NavigationScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) => void }) {
     const session = useNavigationSession();
@@ -339,11 +342,12 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 )}
 
                 <div className="bg-surface-soft/95 backdrop-blur border-t border-line pt-3 pb-3">
-                    {profile.hasElevation && (
-                        <div className="px-4 pb-2">
-                            <ProfileChart profile={profile} height={72} currentDistance={metrics?.distanceDone ?? null} />
-                        </div>
-                    )}
+                    {/* Info windows: profile, weather, and slope details (swipable) */}
+                    <div className="px-4 pb-2">
+                        <InfoWindows
+                            windows={buildInfoWindows(profile, route, metrics)}
+                        />
+                    </div>
                     <MetricPanels panels={panels} />
 
                     <div className="flex gap-2 px-4 pt-4">
@@ -454,6 +458,84 @@ function buildPanels(metrics: SessionMetrics | null) {
             ],
         },
     ];
+}
+
+function buildInfoWindows(profile: ReturnType<typeof getRouteProfile>, route: Route, metrics: SessionMetrics | null) {
+    const windows: { id: string; title: string; content: React.ReactNode }[] = [];
+
+    // Profile window
+    if (profile.hasElevation) {
+        windows.push({
+            id: 'profile',
+            title: 'Perfil',
+            content: <ProfileChart profile={profile} height={96} currentDistance={metrics?.distanceDone ?? null} />,
+        });
+    }
+
+    // Weather window
+    if (route) {
+        const etaMinutes = metrics?.remainingSeconds != null ? Math.max(0, Math.round(metrics.remainingSeconds / 60)) : 0;
+        windows.push({
+            id: 'weather',
+            title: 'Tiempo',
+            content: <RouteWeatherPanel route={route} etaMinutes={etaMinutes} />,
+        });
+    }
+
+    // Slope / ascent-descent detail window
+    if (profile.hasElevation && metrics) {
+        const center = Math.max(0, Math.min(profile.totalDistance, metrics.distanceDone || 0));
+        const windowMeters = 200; // sample window around user in meters
+        const start = Math.max(0, center - windowMeters / 2);
+        const end = Math.min(profile.totalDistance, start + windowMeters);
+
+        const startSample = sampleProfile(profile, start);
+        const endSample = sampleProfile(profile, end);
+
+        let avgSlope = 0;
+        let gained = 0;
+        let length = Math.max(0.001, end - start);
+
+        if (startSample && endSample) {
+            avgSlope = ((endSample.elevation - startSample.elevation) / length) * 100;
+            // approximate accumulated positive/negative within window via cumulative arrays
+            const si = indexAtDistance(profile, start);
+            const ei = indexAtDistance(profile, end);
+            const ascentAtStart = profile.cumulativeAscent[si] ?? 0;
+            const ascentAtEnd = profile.cumulativeAscent[ei] ?? 0;
+            gained = Math.max(0, ascentAtEnd - ascentAtStart);
+        }
+
+        const direction = avgSlope > 0.5 ? 'Subida' : avgSlope < -0.5 ? 'Bajada' : 'Plano';
+
+        const content = (
+            <section className="bg-surface border border-line rounded-2xl p-4">
+                <p className="text-sm font-semibold text-ink mb-2">{direction}</p>
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-canvas border border-line rounded-xl p-3">
+                        <p className="text-[11px] text-ink-faint">% medio</p>
+                        <p className="text-xl font-semibold tabular mt-1">{formatPercent(avgSlope)}</p>
+                    </div>
+                    <div className="bg-canvas border border-line rounded-xl p-3">
+                        <p className="text-[11px] text-ink-faint">Desnivel</p>
+                        <p className="text-xl font-semibold tabular mt-1">{formatSignedElevation(gained)}</p>
+                    </div>
+                    <div className="bg-canvas border border-line rounded-xl p-3">
+                        <p className="text-[11px] text-ink-faint">Longitud</p>
+                        <p className="text-xl font-semibold tabular mt-1">{formatDistance(length)}</p>
+                    </div>
+                </div>
+
+                <div className="mt-3">
+                    <ProfileChart profile={profile} height={72} currentDistance={metrics.distanceDone ?? null} />
+                </div>
+            </section>
+        );
+
+        windows.push({ id: 'slope', title: 'Subida/Bajada', content });
+    }
+
+    return windows;
 }
 
 function EmptyNavigationState({ hydrated, onNavigate }: { hydrated: boolean; onNavigate: (s: Screen) => void }) {
