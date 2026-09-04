@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Map as MapIcon, Navigation2, TrendingDown, TrendingUp } from 'lucide-react';
 import { Route } from '../lib/db';
 import { Screen } from '../App';
@@ -24,6 +24,9 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
     // Profile chart is rendered by ProfileChart component below
 
     const isActiveRoute = session.status !== 'idle' && session.route?.id === route.id;
+    const [showFill, setShowFill] = useState(true);
+    const [showPOI, setShowPOI] = useState(true);
+    const [showSegs, setShowSegs] = useState(true);
 
     return (
         <div className="flex flex-col min-h-full bg-canvas">
@@ -60,7 +63,23 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
                         )}
                     </div>
                     {profile.hasElevation ? (
-                        <ProfileChart profile={profile} height={160} />
+                        <div>
+                            <div className="flex items-center gap-3 mb-3">
+                                <label className="flex items-center gap-2 text-xs text-ink-faint">
+                                    <input type="checkbox" className="form-checkbox" checked={showFill} onChange={(e) => setShowFill(e.currentTarget.checked)} />
+                                    <span>Relleno por pendiente</span>
+                                </label>
+                                <label className="flex items-center gap-2 text-xs text-ink-faint">
+                                    <input type="checkbox" className="form-checkbox" checked={showPOI} onChange={(e) => setShowPOI(e.currentTarget.checked)} />
+                                    <span>Puntos de interés</span>
+                                </label>
+                                <label className="flex items-center gap-2 text-xs text-ink-faint">
+                                    <input type="checkbox" className="form-checkbox" checked={showSegs} onChange={(e) => setShowSegs(e.currentTarget.checked)} />
+                                    <span>Subidas / Bajadas</span>
+                                </label>
+                            </div>
+                            <ProfileChart profile={profile} height={160} analysis={analysis} points={points} showColoredFill={showFill} showPoints={showPOI} showSegments={showSegs} />
+                        </div>
                     ) : (
                         <p className="text-sm text-ink-soft py-6 text-center">
                             Este archivo GPX no incluye datos de altitud, por lo que no se puede calcular el desnivel.
