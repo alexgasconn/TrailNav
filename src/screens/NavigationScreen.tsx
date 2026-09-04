@@ -480,16 +480,35 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                                 ).map((s) => (
                                     <button
                                         key={s}
-                                        onClick={async () => {
+                                        onClick={async (ev) => {
+                                            // prevent document click handlers from interfering
+                                            try {
+                                                ev.stopPropagation();
+                                            } catch (e) { }
                                             setShowMapMenu(false);
                                             setMapStyle(s);
                                             try {
-                                                await saveSettings({ ...(await getSettings()), mapStyle: s });
-                                            } catch (e) { }
+                                                const current = await getSettings();
+                                                await saveSettings({ ...current, mapStyle: s });
+                                            } catch (e) {
+                                                // eslint-disable-next-line no-console
+                                                console.warn('Failed to save map style', e);
+                                            }
                                             try {
                                                 const m = mapRef.current;
-                                                if (m) m.setStyle(buildMapStyle(s));
-                                            } catch (e) { }
+                                                if (m) {
+                                                    // provide small visual feedback while switching
+                                                    try { setMapError(`Aplicando estilo ${s}…`); } catch (e) { }
+                                                    m.setStyle(buildMapStyle(s));
+                                                    try { setMapError(null); } catch (e) { }
+                                                } else {
+                                                    try { setMapError('Mapa no inicializado'); } catch (e) { }
+                                                }
+                                            } catch (e) {
+                                                // eslint-disable-next-line no-console
+                                                console.error('Error applying map style', e);
+                                                try { setMapError(String(e)); } catch (err) { }
+                                            }
                                         }}
                                         className={`w-full text-left px-3 py-2 hover:bg-surface/80 ${mapStyle === s ? 'font-semibold' : ''}`}
                                     >
