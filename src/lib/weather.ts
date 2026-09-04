@@ -34,9 +34,9 @@ function readCache(routeId: string): RouteWeatherTimeline | null {
         const cached = localStorage.getItem(cacheKey(routeId));
         if (!cached) return null;
         return JSON.parse(cached) as RouteWeatherTimeline;
-        } catch (e) {
-            return null;
-        }
+    } catch (e) {
+        return null;
+    }
 }
 
 export async function getRouteWeather(route: Route, etaMinutes: number, startTimestamp?: number, forceRefresh = false): Promise<RouteWeatherTimeline> {

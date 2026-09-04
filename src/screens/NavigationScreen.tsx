@@ -105,157 +105,157 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 });
                 map.on('dragstart', () => setFollowing(false));
                 map.on('load', () => {
-                addRouteLayers(map, route.geoJson, { width: 6, showProgress: true });
+                    addRouteLayers(map, route.geoJson, { width: 6, showProgress: true });
 
-                routePoints
-                    .filter((point) => point.kind !== 'turn')
-                    .forEach((point) => {
-                        const marker = new maplibregl.Marker({ element: createRoutePointMarker(point) })
-                            .setLngLat(point.coordinate)
-                            .setPopup(
-                                new maplibregl.Popup({ offset: 16, closeButton: false }).setText(
-                                    `${point.name} · km ${(point.distance / 1000).toFixed(1)}`
+                    routePoints
+                        .filter((point) => point.kind !== 'turn')
+                        .forEach((point) => {
+                            const marker = new maplibregl.Marker({ element: createRoutePointMarker(point) })
+                                .setLngLat(point.coordinate)
+                                .setPopup(
+                                    new maplibregl.Popup({ offset: 16, closeButton: false }).setText(
+                                        `${point.name} · km ${(point.distance / 1000).toFixed(1)}`
+                                    )
                                 )
-                            )
-                            .addTo(map);
-                        poiMarkersRef.current.push(marker);
-                    });
+                                .addTo(map);
+                            poiMarkersRef.current.push(marker);
+                        });
 
-                userMarkerRef.current = new maplibregl.Marker({
-                    element: createUserMarkerElement(),
-                    rotationAlignment: 'map',
-                    pitchAlignment: 'map',
-                })
-                    .setLngLat(profile.coordinates[0] ?? [0, 40])
-                    .addTo(map);
+                    userMarkerRef.current = new maplibregl.Marker({
+                        element: createUserMarkerElement(),
+                        rotationAlignment: 'map',
+                        pitchAlignment: 'map',
+                    })
+                        .setLngLat(profile.coordinates[0] ?? [0, 40])
+                        .addTo(map);
 
-                // Ensure the container has explicit full-viewport sizing to avoid
-                // parent-height collapse on some mobile browsers.
-                try {
-                    if (containerRef.current) {
-                        containerRef.current.style.width = '100%';
-                        containerRef.current.style.minHeight = '100dvh';
-                        containerRef.current.style.height = '100dvh';
-                    }
-                } catch (e) { }
-
-                // Force a resize after load and again shortly after to ensure the canvas
-                // fills the container (fixes cases where only the lower part is visible).
-                const safeResize = () => {
+                    // Ensure the container has explicit full-viewport sizing to avoid
+                    // parent-height collapse on some mobile browsers.
                     try {
-                        map.resize();
-                    } catch (e) {
-                        // ignore
-                    }
-                };
-                safeResize();
-                const later = window.setTimeout(() => {
-                    safeResize();
-                    // also nudge map to redraw at the current center/zoom
-                    try {
-                        map.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
+                        if (containerRef.current) {
+                            containerRef.current.style.width = '100%';
+                            containerRef.current.style.minHeight = '100dvh';
+                            containerRef.current.style.height = '100dvh';
+                        }
                     } catch (e) { }
-                }, 250);
 
-                setMapReady(true);
-                setMapError(null);
-
-                // also listen for idle as a fallback in case load timing is odd
-                try {
-                    map.on('idle', () => {
+                    // Force a resize after load and again shortly after to ensure the canvas
+                    // fills the container (fixes cases where only the lower part is visible).
+                    const safeResize = () => {
                         try {
-                            setMapReady(true);
-                        } catch (e) { }
-                    });
-                } catch (e) { }
-
-                // when base source finishes loading, mark ready
-                try {
-                    map.on('sourcedata', (ev: any) => {
-                        try {
-                            if (ev.sourceId === 'base' && ev.isSourceLoaded) {
-                                try { setMapReady(true); } catch (e) { }
-                            }
-                        } catch (e) { }
-                    });
-                } catch (e) { }
-
-                // Add window resize / orientation handlers to keep the canvas correct.
-                const onWindowResize = () => safeResize();
-                window.addEventListener('resize', onWindowResize);
-                window.addEventListener('orientationchange', onWindowResize);
-
-                // cleanup for the handlers when map is destroyed
-                map.on('remove', () => {
-                    window.removeEventListener('resize', onWindowResize);
-                    window.removeEventListener('orientationchange', onWindowResize);
-                });
-
-                // ensure we clear the timeout on unmount
-                const clearLater = () => window.clearTimeout(later);
-
-                // attach to local scope so cleanup in effect return can clear
-                (map as any).__trailnav_clearLater = clearLater;
-
-                // safety: if load doesn't fire for some reason, mark ready when canvas appears
-                try {
-                    const canvasCheck = window.setTimeout(() => {
-                        try {
-                            const canvas = map.getContainer().querySelector('canvas');
-                            if (canvas && !mapReady) {
-                                try { setMapReady(true); } catch (e) { }
-                            }
-                        } catch (e) { }
-                    }, 1000);
-                    // style load timeout for clearer diagnostics
-                    const styleTimeout = window.setTimeout(() => {
-                        try {
-                            if (mapRef.current && !(mapRef.current as any).isStyleLoaded?.()) {
-                                try { setMapError('Style load timeout'); } catch (e) { }
-                            }
-                        } catch (e) { }
-                    }, 10000);
-                    // attach to clearLater so it gets cleared on destroy
-                    const prev = (map as any).__trailnav_clearLater;
-                    (map as any).__trailnav_clearLater = () => {
-                        try { window.clearTimeout(canvasCheck); } catch (e) { }
-                        try { window.clearTimeout(styleTimeout); } catch (e) { }
-                        try { if (prev) prev(); } catch (e) { }
+                            map.resize();
+                        } catch (e) {
+                            // ignore
+                        }
                     };
-                } catch (e) { }
+                    safeResize();
+                    const later = window.setTimeout(() => {
+                        safeResize();
+                        // also nudge map to redraw at the current center/zoom
+                        try {
+                            map.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
+                        } catch (e) { }
+                    }, 250);
 
-                // Debug overlay to help diagnose clipped map issues on mobile devices.
-                // Visible only while `window.__TRAILNAV_DEBUG_MAP` is true.
-                try {
-                    if ((window as any).__TRAILNAV_DEBUG_MAP) {
-                        const dbg = document.createElement('div');
-                        dbg.style.position = 'fixed';
-                        dbg.style.left = '8px';
-                        dbg.style.top = '8px';
-                        dbg.style.zIndex = '99999';
-                        dbg.style.background = 'rgba(0,0,0,0.6)';
-                        dbg.style.color = 'white';
-                        dbg.style.padding = '6px 8px';
-                        dbg.style.fontSize = '12px';
-                        dbg.style.borderRadius = '8px';
-                        dbg.innerText = 'map-debug';
-                        document.body.appendChild(dbg);
-                        const updateDbg = () => {
+                    setMapReady(true);
+                    setMapError(null);
+
+                    // also listen for idle as a fallback in case load timing is odd
+                    try {
+                        map.on('idle', () => {
                             try {
-                                const crect = containerRef.current?.getBoundingClientRect();
-                                const canvas = map.getContainer().querySelector('canvas');
-                                const crectC = canvas ? canvas.getBoundingClientRect() : null;
-                                dbg.innerText = `container: ${crect?.width?.toFixed(0)}x${crect?.height?.toFixed(0)}\ncanvas: ${crectC?.width?.toFixed(0)}x${crectC?.height?.toFixed(0)}\nscrollY:${window.scrollY}`;
+                                setMapReady(true);
                             } catch (e) { }
+                        });
+                    } catch (e) { }
+
+                    // when base source finishes loading, mark ready
+                    try {
+                        map.on('sourcedata', (ev: any) => {
+                            try {
+                                if (ev.sourceId === 'base' && ev.isSourceLoaded) {
+                                    try { setMapReady(true); } catch (e) { }
+                                }
+                            } catch (e) { }
+                        });
+                    } catch (e) { }
+
+                    // Add window resize / orientation handlers to keep the canvas correct.
+                    const onWindowResize = () => safeResize();
+                    window.addEventListener('resize', onWindowResize);
+                    window.addEventListener('orientationchange', onWindowResize);
+
+                    // cleanup for the handlers when map is destroyed
+                    map.on('remove', () => {
+                        window.removeEventListener('resize', onWindowResize);
+                        window.removeEventListener('orientationchange', onWindowResize);
+                    });
+
+                    // ensure we clear the timeout on unmount
+                    const clearLater = () => window.clearTimeout(later);
+
+                    // attach to local scope so cleanup in effect return can clear
+                    (map as any).__trailnav_clearLater = clearLater;
+
+                    // safety: if load doesn't fire for some reason, mark ready when canvas appears
+                    try {
+                        const canvasCheck = window.setTimeout(() => {
+                            try {
+                                const canvas = map.getContainer().querySelector('canvas');
+                                if (canvas && !mapReady) {
+                                    try { setMapReady(true); } catch (e) { }
+                                }
+                            } catch (e) { }
+                        }, 1000);
+                        // style load timeout for clearer diagnostics
+                        const styleTimeout = window.setTimeout(() => {
+                            try {
+                                if (mapRef.current && !(mapRef.current as any).isStyleLoaded?.()) {
+                                    try { setMapError('Style load timeout'); } catch (e) { }
+                                }
+                            } catch (e) { }
+                        }, 10000);
+                        // attach to clearLater so it gets cleared on destroy
+                        const prev = (map as any).__trailnav_clearLater;
+                        (map as any).__trailnav_clearLater = () => {
+                            try { window.clearTimeout(canvasCheck); } catch (e) { }
+                            try { window.clearTimeout(styleTimeout); } catch (e) { }
+                            try { if (prev) prev(); } catch (e) { }
                         };
-                        updateDbg();
-                        const dbgI = window.setInterval(updateDbg, 500);
-                        setTimeout(() => {
-                            window.clearInterval(dbgI);
-                            dbg.remove();
-                        }, 15000);
-                    }
-                } catch (e) { }
+                    } catch (e) { }
+
+                    // Debug overlay to help diagnose clipped map issues on mobile devices.
+                    // Visible only while `window.__TRAILNAV_DEBUG_MAP` is true.
+                    try {
+                        if ((window as any).__TRAILNAV_DEBUG_MAP) {
+                            const dbg = document.createElement('div');
+                            dbg.style.position = 'fixed';
+                            dbg.style.left = '8px';
+                            dbg.style.top = '8px';
+                            dbg.style.zIndex = '99999';
+                            dbg.style.background = 'rgba(0,0,0,0.6)';
+                            dbg.style.color = 'white';
+                            dbg.style.padding = '6px 8px';
+                            dbg.style.fontSize = '12px';
+                            dbg.style.borderRadius = '8px';
+                            dbg.innerText = 'map-debug';
+                            document.body.appendChild(dbg);
+                            const updateDbg = () => {
+                                try {
+                                    const crect = containerRef.current?.getBoundingClientRect();
+                                    const canvas = map.getContainer().querySelector('canvas');
+                                    const crectC = canvas ? canvas.getBoundingClientRect() : null;
+                                    dbg.innerText = `container: ${crect?.width?.toFixed(0)}x${crect?.height?.toFixed(0)}\ncanvas: ${crectC?.width?.toFixed(0)}x${crectC?.height?.toFixed(0)}\nscrollY:${window.scrollY}`;
+                                } catch (e) { }
+                            };
+                            updateDbg();
+                            const dbgI = window.setInterval(updateDbg, 500);
+                            setTimeout(() => {
+                                window.clearInterval(dbgI);
+                                dbg.remove();
+                            }, 15000);
+                        }
+                    } catch (e) { }
                 });
             } catch (e) {
                 // eslint-disable-next-line no-console
@@ -345,18 +345,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
         <div className="w-full h-full relative overflow-hidden bg-canvas">
             <div ref={containerRef} className="absolute inset-0" />
 
-            {/* Diagnostic box to show map initialization state */}
-            <div className="absolute top-3 right-3 z-40 pointer-events-auto">
-                <div className="bg-surface border border-line rounded-xl p-2 text-xs">
-                    <div className="font-medium">Mapa</div>
-                    <div>Listo: {mapReady ? 'sí' : 'no'}</div>
-                    <div>Creado: {mapRef.current ? 'sí' : 'no'}</div>
-                    <div>GeoJSON: {route.geoJson ? 'sí' : 'no'}</div>
-                    <div>StyleLoaded: {mapRef.current ? String((mapRef.current as any).isStyleLoaded?.() ?? false) : 'n/a'}</div>
-                    <div>Canvas: {mapRef.current ? (() => { try { const c = mapRef.current!.getContainer().querySelector('canvas'); return c ? 'sí' : 'no'; } catch (e) { return 'err'; } })() : 'n/a'}</div>
-                    {mapError && <div className="text-alert mt-1">Error: {mapError}</div>}
-                </div>
-            </div>
+            {/* Diagnostic box removed per user request */}
 
             <div className="absolute top-0 left-0 right-0 pt-safe z-20 pointer-events-none">
                 <div className="flex items-center gap-2 px-3 py-3">
@@ -418,6 +407,15 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 aria-label={following ? 'Centrado en mi posición (activo)' : 'Volver a centrar en mi posición'}
             >
                 <Crosshair size={22} />
+            </button>
+
+            {/* Floating toggle to show/hide the info carousel */}
+            <button
+                onClick={() => setShowPanels((v) => !v)}
+                className={`absolute right-3 bottom-[15.5rem] z-20 touch-target grid place-items-center w-12 h-12 rounded-full shadow-md bg-surface border border-line text-ink`}
+                aria-label={showPanels ? 'Ocultar carrusel de información' : 'Mostrar carrusel de información'}
+            >
+                {showPanels ? <Eye size={18} /> : <EyeOff size={18} />}
             </button>
 
             <div className="absolute bottom-0 left-0 right-0 z-20 pb-safe">
