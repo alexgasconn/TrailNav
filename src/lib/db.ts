@@ -13,7 +13,7 @@ export interface Route {
   createdAt: number;
 }
 
-export type MapStyleId = 'topo' | 'satellite';
+export type MapStyleId = 'topo' | 'satellite' | 'carto' | 'stamen';
 
 export interface MapRegion {
   id: string;

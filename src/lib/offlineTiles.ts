@@ -14,6 +14,18 @@ const TILE_SOURCES: Record<MapStyleId, { url: (z: number, x: number, y: number) 
         attribution: '© Esri, Maxar, Earthstar Geographics',
         maxZoom: 18,
     },
+    carto: {
+        // CartoDB Positron
+        url: (z, x, y) => `https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/${z}/${x}/${y}.png`,
+        attribution: '© Carto, © OpenStreetMap',
+        maxZoom: 19,
+    },
+    stamen: {
+        // Stamen Terrain (https)
+        url: (z, x, y) => `https://stamen-tiles.a.ssl.fastly.net/terrain/${z}/${x}/${y}.jpg`,
+        attribution: 'Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.',
+        maxZoom: 18,
+    },
 };
 
 export function tileAttribution(style: MapStyleId) {

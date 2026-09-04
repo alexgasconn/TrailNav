@@ -4,7 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
 import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Satellite, Eye, EyeOff } from 'lucide-react';
 import { Screen } from '../App';
-import { Route, getSettings } from '../lib/db';
+import { Route, getSettings, saveSettings, MapStyleId } from '../lib/db';
 import { SessionMetrics, useNavigationSession } from '../state/navigationSession';
 import { getRouteProfile } from '../lib/routeProfile';
 import { getRoutePoints } from '../lib/routePoints';
@@ -60,6 +60,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     const [confirmFinish, setConfirmFinish] = useState(false);
     const [slopeWindowMeters, setSlopeWindowMeters] = useState(200);
     const [showPanels, setShowPanels] = useState(true);
+    const [mapStyle, setMapStyle] = useState<MapStyleId>('topo');
 
     const profile = useMemo(() => getRouteProfile(route), [route]);
     const routePoints = useMemo(() => getRoutePoints(route), [route]);
@@ -69,7 +70,12 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     );
 
     useEffect(() => {
-        getSettings().then((settings) => setRotateWithHeading(!settings.keepMapNorthUp));
+        getSettings().then((settings) => {
+            setRotateWithHeading(!settings.keepMapNorthUp);
+            try {
+                if (settings.mapStyle) setMapStyle(settings.mapStyle as MapStyleId);
+            } catch (e) { }
+        });
     }, []);
 
     useEffect(() => {
@@ -257,6 +263,16 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                         }
                     } catch (e) { }
                 });
+
+                // When style is changed dynamically, re-apply route layers after style load
+                try {
+                    map.on('styledata', () => {
+                        try {
+                            // Re-apply route layers after a style change.
+                            addRouteLayers(map, route.geoJson, { width: 6, showProgress: true });
+                        } catch (e) { }
+                    });
+                } catch (e) { }
             } catch (e) {
                 // eslint-disable-next-line no-console
                 console.error('Map init error', e);
@@ -378,6 +394,28 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     >
                         {showPanels ? <Eye size={22} /> : <EyeOff size={22} />}
                     </button>
+                    {/* Map style cycle button */}
+                    <button
+                        onClick={async () => {
+                            const styles: MapStyleId[] = ['topo', 'carto', 'stamen', 'satellite'];
+                            const idx = styles.indexOf(mapStyle);
+                            const next = styles[(idx + 1) % styles.length];
+                            setMapStyle(next);
+                            try {
+                                await saveSettings({ ...(await getSettings()), mapStyle: next });
+                            } catch (e) { }
+                            try {
+                                const m = mapRef.current;
+                                if (m) {
+                                    m.setStyle(buildMapStyle(next));
+                                }
+                            } catch (e) { }
+                        }}
+                        className="pointer-events-auto touch-target grid place-items-center rounded-xl border shadow-sm bg-surface/95 border-line text-ink"
+                        aria-label="Cambiar estilo de mapa"
+                    >
+                        <Satellite size={20} />
+                    </button>
                 </div>
 
                 <div className="h-1 mx-3 rounded-full bg-line overflow-hidden">
@@ -409,14 +447,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 <Crosshair size={22} />
             </button>
 
-            {/* Floating toggle to show/hide the info carousel */}
-            <button
-                onClick={() => setShowPanels((v) => !v)}
-                className={`absolute right-3 bottom-[15.5rem] z-20 touch-target grid place-items-center w-12 h-12 rounded-full shadow-md bg-surface border border-line text-ink`}
-                aria-label={showPanels ? 'Ocultar carrusel de información' : 'Mostrar carrusel de información'}
-            >
-                {showPanels ? <Eye size={18} /> : <EyeOff size={18} />}
-            </button>
+            {/* Floating toggle removed — use top header toggle only */}
 
             <div className="absolute bottom-0 left-0 right-0 z-20 pb-safe">
                 {metrics?.offRoute && (

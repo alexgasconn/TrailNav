@@ -7,6 +7,8 @@ import { RoutePoint, RoutePointKind } from './routePoints';
 export const MAP_STYLE_LABELS: Record<MapStyleId, string> = {
     topo: 'Topográfico',
     satellite: 'Satélite',
+    carto: 'Carto (claro)',
+    stamen: 'Stamen (terrain)',
 };
 
 export function buildMapStyle(style: MapStyleId): StyleSpecification {
