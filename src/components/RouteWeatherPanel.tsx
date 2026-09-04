@@ -10,8 +10,7 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
     const [timeline, setTimeline] = useState<RouteWeatherTimeline | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
-    const [startTime, setStartTime] = useState<string>(() => new Date().toTimeString().slice(0, 5));
+    // use current time as start timestamp (no manual date/time selection)
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [visible, setVisible] = useState<Record<string, boolean>>({});
     const [hours, setHours] = useState<number>(48);
@@ -20,7 +19,7 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
         let cancelled = false;
         setLoading(true);
         setError(null);
-        const startTimestamp = Date.parse(`${startDate}T${startTime}`);
+        const startTimestamp = Date.now();
         getRouteWeather(route, etaMinutes, startTimestamp)
             .then((result) => {
                 if (!cancelled) {
@@ -39,12 +38,12 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
         return () => {
             cancelled = true;
         };
-    }, [route.id, etaMinutes, startDate, startTime]);
+    }, [route.id, etaMinutes]);
 
     const refresh = () => {
         setLoading(true);
         setError(null);
-        const startTimestamp = Date.parse(`${startDate}T${startTime}`);
+        const startTimestamp = Date.now();
         getRouteWeather(route, etaMinutes, startTimestamp, true)
             .then((result) => {
                 setTimeline(result);
@@ -96,7 +95,7 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
             }
         });
 
-        const startTimestamp = Date.parse(`${startDate}T${startTime}`);
+        const startTimestamp = Date.now();
         const clipEnd = startTimestamp + hours * 3600000;
         // clamp to requested hours window
         t0 = Math.max(t0, startTimestamp);
@@ -164,20 +163,6 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
             <div className="flex items-center justify-between gap-3 mb-3">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Meteorología en ruta</h2>
                 <div className="flex items-center gap-2">
-                    <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="h-8 px-2 rounded-xl border border-line bg-surface text-sm"
-                        aria-label="Fecha de inicio"
-                    />
-                    <input
-                        type="time"
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        className="h-8 px-2 rounded-xl border border-line bg-surface text-sm"
-                        aria-label="Hora de inicio"
-                    />
                     <button
                         onClick={refresh}
                         disabled={loading}

@@ -30,7 +30,6 @@ import {
     formatTimeOfDay,
 } from '../lib/format';
 import ProfileChart from '../components/ProfileChart';
-import { RouteWeatherPanel } from '../components/RouteWeatherPanel';
 import { sampleProfile, indexAtDistance } from '../lib/routeProfile';
 
 export function NavigationScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) => void }) {
@@ -705,15 +704,7 @@ function buildInfoWindows(
 ): Array<{ id: string; title: string; content: React.ReactNode }> {
     const windows: Array<{ id: string; title: string; content: React.ReactNode }> = [];
 
-    // Weather window
-    if (route) {
-        const etaMinutes = metrics?.remainingSeconds != null ? Math.max(0, Math.round(metrics.remainingSeconds / 60)) : 0;
-        windows.push({
-            id: 'weather',
-            title: 'Tiempo',
-            content: <RouteWeatherPanel route={route} etaMinutes={etaMinutes} />,
-        });
-    }
+    // Note: Weather panel intentionally omitted from navigation info carousel.
 
     // Slope / ascent-descent detail window
     if (profile.hasElevation && metrics) {
