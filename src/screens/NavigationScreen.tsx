@@ -575,7 +575,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
 
                 <div className="bg-surface-soft/95 backdrop-blur border-t border-line pt-3 pb-3">
                     {showPanels && (
-                        <div className="px-4 pb-2">
+                        <div className="px-4 pb-2" style={{ maxHeight: 260 }}>
                             <MetricPanels panels={panels} />
                         </div>
                     )}
@@ -727,7 +727,7 @@ function buildInfoWindows(
 
         const content = (
             <div className="p-0">
-                <ProfileChart profile={profile} height={72} currentDistance={metrics.distanceDone ?? null} showPoints={false} showSegments={false} showColoredFill={false} />
+                <ProfileChart profile={profile} height={200} currentDistance={metrics.distanceDone ?? null} showPoints={false} showSegments={false} showColoredFill={false} />
             </div>
         );
 
