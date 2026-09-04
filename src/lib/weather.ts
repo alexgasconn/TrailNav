@@ -34,9 +34,9 @@ function readCache(routeId: string): RouteWeatherTimeline | null {
         const cached = localStorage.getItem(cacheKey(routeId));
         if (!cached) return null;
         return JSON.parse(cached) as RouteWeatherTimeline;
-    } catch {
-        return null;
-    }
+        } catch (e) {
+            return null;
+        }
 }
 
 export async function getRouteWeather(route: Route, etaMinutes: number, startTimestamp?: number, forceRefresh = false): Promise<RouteWeatherTimeline> {
@@ -105,7 +105,7 @@ export async function getRouteWeather(route: Route, etaMinutes: number, startTim
         const timeline = { samples, updatedAt: Date.now(), fromCache: false };
         try {
             localStorage.setItem(cacheKey(cacheId), JSON.stringify(timeline));
-        } catch { }
+        } catch (e) { }
         return timeline;
     } catch (error) {
         if (cached) return { ...cached, fromCache: true };

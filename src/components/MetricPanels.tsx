@@ -39,61 +39,72 @@ export interface MetricPanel {
  * Paneles de métricas deslizables: se usa scroll con ajuste por página para que
  * el gesto horizontal sea el nativo del sistema.
  */
-export function MetricPanels({ panels }: { panels: MetricPanel[] }) {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [activeIndex, setActiveIndex] = useState(0);
+export class MetricPanels extends React.Component<{ panels: MetricPanel[] }, { activeIndex: number }> {
+    containerRef: React.RefObject<HTMLDivElement>;
 
-    const handleScroll = useCallback(() => {
-        const container = containerRef.current;
+    constructor(props: { panels: MetricPanel[] }) {
+        super(props);
+        this.containerRef = React.createRef<HTMLDivElement>();
+        this.state = { activeIndex: 0 };
+        this.handleScroll = this.handleScroll.bind(this);
+        this.goTo = this.goTo.bind(this);
+    }
+
+    handleScroll() {
+        const container = this.containerRef.current;
+        const panels = this.props.panels;
         if (!container) return;
         const index = Math.round(container.scrollLeft / container.clientWidth);
-        setActiveIndex(Math.min(panels.length - 1, Math.max(0, index)));
-    }, [panels.length]);
+        this.setState({ activeIndex: Math.min(panels.length - 1, Math.max(0, index)) });
+    }
 
-    const goTo = (index: number) => {
-        const container = containerRef.current;
+    goTo(index: number) {
+        const container = this.containerRef.current;
         if (!container) return;
         container.scrollTo({ left: index * container.clientWidth, behavior: 'smooth' });
-    };
+    }
 
-    if (panels.length === 0) return null;
+    render() {
+        const panels = this.props.panels;
+        if (panels.length === 0) return null;
 
-    return (
-        <div>
-            <div
-                ref={containerRef}
-                onScroll={handleScroll}
-                className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar"
-                style={{ touchAction: 'pan-x' }}
-            >
-                {panels.map((panel) => (
-                    <section key={panel.id} className="w-full shrink-0 snap-center px-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint mb-2">{panel.title}</p>
-                        {panel.content ? (
-                            <ErrorBoundary>{panel.content}</ErrorBoundary>
-                        ) : (
-                            <div className={`grid gap-2 ${panel.items && panel.items.length > 3 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                                {panel.items?.map((item) => (
-                                    <MetricCell key={item.label} item={item} />
-                                ))}
-                            </div>
-                        )}
-                    </section>
-                ))}
+        return (
+            <div>
+                <div
+                    ref={this.containerRef}
+                    onScroll={this.handleScroll}
+                    className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar"
+                    style={{ touchAction: 'pan-x' }}
+                >
+                    {panels.map((panel) => (
+                        <section key={panel.id} className="w-full shrink-0 snap-center px-4">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint mb-2">{panel.title}</p>
+                            {panel.content ? (
+                                <ErrorBoundary>{panel.content}</ErrorBoundary>
+                            ) : (
+                                <div className={`grid gap-2 ${panel.items && panel.items.length > 3 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                    {panel.items?.map((item) => (
+                                        <MetricCell key={item.label} item={item} />
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    ))}
+                </div>
+
+                <div className="flex justify-center gap-1.5 pt-3">
+                    {panels.map((panel, index) => (
+                        <button
+                            key={panel.id}
+                            onClick={() => this.goTo(index)}
+                            aria-label={`Ver ${panel.title}`}
+                            className={`h-1.5 rounded-full transition-all ${index === this.state.activeIndex ? 'w-6 bg-moss' : 'w-1.5 bg-line-strong'}`}
+                        />
+                    ))}
+                </div>
             </div>
-
-            <div className="flex justify-center gap-1.5 pt-3">
-                {panels.map((panel, index) => (
-                    <button
-                        key={panel.id}
-                        onClick={() => goTo(index)}
-                        aria-label={`Ver ${panel.title}`}
-                        className={`h-1.5 rounded-full transition-all ${index === activeIndex ? 'w-6 bg-moss' : 'w-1.5 bg-line-strong'}`}
-                    />
-                ))}
-            </div>
-        </div>
-    );
+        );
+    }
 }
 
 function MetricCell({ item }: { item: MetricItem }) {

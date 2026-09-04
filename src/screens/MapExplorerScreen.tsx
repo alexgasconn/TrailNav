@@ -98,22 +98,22 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                     containerRef.current.style.minHeight = '100dvh';
                     containerRef.current.style.height = '100dvh';
                 }
-            } catch { }
+            } catch (e) { }
 
             try {
                 map.resize();
-            } catch { }
+            } catch (e) { }
             const later = window.setTimeout(() => {
                 try {
                     map.resize();
                     map.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
-                } catch { }
+                } catch (e) { }
             }, 250);
 
             const onWindowResize = () => {
                 try {
                     map.resize();
-                } catch { }
+                } catch (e) { }
             };
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('orientationchange', onWindowResize);
@@ -144,7 +144,7 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                             const canvas = map.getContainer().querySelector('canvas');
                             const crectC = canvas ? canvas.getBoundingClientRect() : null;
                             dbg.innerText = `container: ${crect?.width?.toFixed(0)}x${crect?.height?.toFixed(0)}\ncanvas: ${crectC?.width?.toFixed(0)}x${crectC?.height?.toFixed(0)}\nscrollY:${window.scrollY}`;
-                        } catch { }
+                        } catch (e) { }
                     };
                     updateDbg();
                     const dbgI = window.setInterval(updateDbg, 500);
@@ -153,7 +153,7 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                         dbg.remove();
                     }, 15000);
                 }
-            } catch { }
+            } catch (e) { }
         });
 
         return () => {

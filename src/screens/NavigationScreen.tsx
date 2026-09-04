@@ -53,6 +53,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     const lastProgressRef = useRef(-1);
 
     const [mapReady, setMapReady] = useState(false);
+    const [mapError, setMapError] = useState<string | null>(null);
     const [initAttempt, setInitAttempt] = useState(0);
     const [following, setFollowing] = useState(true);
     const [rotateWithHeading, setRotateWithHeading] = useState(true);
@@ -84,19 +85,26 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
         getSettings().then((settings) => {
             if (cancelled || mapRef.current || !containerRef.current) return;
 
-            const map = new maplibregl.Map({
-                container: containerRef.current,
-                style: buildMapStyle(settings.mapStyle),
-                center: profile.coordinates[0] ?? [0, 40],
-                zoom: 15,
-                attributionControl: { compact: true },
-                trackResize: true,
-            });
-            mapRef.current = map;
+            try {
+                const map = new maplibregl.Map({
+                    container: containerRef.current,
+                    style: buildMapStyle(settings.mapStyle),
+                    center: profile.coordinates[0] ?? [0, 40],
+                    zoom: 15,
+                    attributionControl: { compact: true },
+                    trackResize: true,
+                });
+                mapRef.current = map;
 
-            map.on('error', (event) => console.error('MapLibre:', event.error));
-            map.on('dragstart', () => setFollowing(false));
-            map.on('load', () => {
+                map.on('error', (event) => {
+                    // eslint-disable-next-line no-console
+                    console.error('MapLibre:', (event as any)?.error ?? event);
+                    try {
+                        setMapError(String((event as any)?.error ?? 'Map error'));
+                    } catch (e) { }
+                });
+                map.on('dragstart', () => setFollowing(false));
+                map.on('load', () => {
                 addRouteLayers(map, route.geoJson, { width: 6, showProgress: true });
 
                 routePoints
@@ -129,7 +137,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                         containerRef.current.style.minHeight = '100dvh';
                         containerRef.current.style.height = '100dvh';
                     }
-                } catch { }
+                } catch (e) { }
 
                 // Force a resize after load and again shortly after to ensure the canvas
                 // fills the container (fixes cases where only the lower part is visible).
@@ -146,10 +154,31 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     // also nudge map to redraw at the current center/zoom
                     try {
                         map.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
-                    } catch { }
+                    } catch (e) { }
                 }, 250);
 
                 setMapReady(true);
+                setMapError(null);
+
+                // also listen for idle as a fallback in case load timing is odd
+                try {
+                    map.on('idle', () => {
+                        try {
+                            setMapReady(true);
+                        } catch (e) { }
+                    });
+                } catch (e) { }
+
+                // when base source finishes loading, mark ready
+                try {
+                    map.on('sourcedata', (ev: any) => {
+                        try {
+                            if (ev.sourceId === 'base' && ev.isSourceLoaded) {
+                                try { setMapReady(true); } catch (e) { }
+                            }
+                        } catch (e) { }
+                    });
+                } catch (e) { }
 
                 // Add window resize / orientation handlers to keep the canvas correct.
                 const onWindowResize = () => safeResize();
@@ -167,6 +196,33 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
 
                 // attach to local scope so cleanup in effect return can clear
                 (map as any).__trailnav_clearLater = clearLater;
+
+                // safety: if load doesn't fire for some reason, mark ready when canvas appears
+                try {
+                    const canvasCheck = window.setTimeout(() => {
+                        try {
+                            const canvas = map.getContainer().querySelector('canvas');
+                            if (canvas && !mapReady) {
+                                try { setMapReady(true); } catch (e) { }
+                            }
+                        } catch (e) { }
+                    }, 1000);
+                    // style load timeout for clearer diagnostics
+                    const styleTimeout = window.setTimeout(() => {
+                        try {
+                            if (mapRef.current && !(mapRef.current as any).isStyleLoaded?.()) {
+                                try { setMapError('Style load timeout'); } catch (e) { }
+                            }
+                        } catch (e) { }
+                    }, 10000);
+                    // attach to clearLater so it gets cleared on destroy
+                    const prev = (map as any).__trailnav_clearLater;
+                    (map as any).__trailnav_clearLater = () => {
+                        try { window.clearTimeout(canvasCheck); } catch (e) { }
+                        try { window.clearTimeout(styleTimeout); } catch (e) { }
+                        try { if (prev) prev(); } catch (e) { }
+                    };
+                } catch (e) { }
 
                 // Debug overlay to help diagnose clipped map issues on mobile devices.
                 // Visible only while `window.__TRAILNAV_DEBUG_MAP` is true.
@@ -190,7 +246,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                                 const canvas = map.getContainer().querySelector('canvas');
                                 const crectC = canvas ? canvas.getBoundingClientRect() : null;
                                 dbg.innerText = `container: ${crect?.width?.toFixed(0)}x${crect?.height?.toFixed(0)}\ncanvas: ${crectC?.width?.toFixed(0)}x${crectC?.height?.toFixed(0)}\nscrollY:${window.scrollY}`;
-                            } catch { }
+                            } catch (e) { }
                         };
                         updateDbg();
                         const dbgI = window.setInterval(updateDbg, 500);
@@ -199,8 +255,16 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                             dbg.remove();
                         }, 15000);
                     }
-                } catch { }
-            });
+                } catch (e) { }
+                });
+            } catch (e) {
+                // eslint-disable-next-line no-console
+                console.error('Map init error', e);
+                try {
+                    setMapError(String(e));
+                } catch (e) { }
+                return;
+            }
         });
 
         return () => {
@@ -212,7 +276,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 try {
                     const m = mapRef.current as any;
                     if (m.__trailnav_clearLater) m.__trailnav_clearLater();
-                } catch { }
+                } catch (e) { }
                 mapRef.current.remove();
             }
             mapRef.current = null;
@@ -249,7 +313,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     useEffect(() => {
         try {
             mapRef.current?.resize();
-        } catch { }
+        } catch (e) { }
     }, [showPanels]);
 
     // Traza ya recorrida sobre la ruta.
@@ -280,6 +344,19 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     return (
         <div className="w-full h-full relative overflow-hidden bg-canvas">
             <div ref={containerRef} className="absolute inset-0" />
+
+            {/* Diagnostic box to show map initialization state */}
+            <div className="absolute top-3 right-3 z-40 pointer-events-auto">
+                <div className="bg-surface border border-line rounded-xl p-2 text-xs">
+                    <div className="font-medium">Mapa</div>
+                    <div>Listo: {mapReady ? 'sí' : 'no'}</div>
+                    <div>Creado: {mapRef.current ? 'sí' : 'no'}</div>
+                    <div>GeoJSON: {route.geoJson ? 'sí' : 'no'}</div>
+                    <div>StyleLoaded: {mapRef.current ? String((mapRef.current as any).isStyleLoaded?.() ?? false) : 'n/a'}</div>
+                    <div>Canvas: {mapRef.current ? (() => { try { const c = mapRef.current!.getContainer().querySelector('canvas'); return c ? 'sí' : 'no'; } catch (e) { return 'err'; } })() : 'n/a'}</div>
+                    {mapError && <div className="text-alert mt-1">Error: {mapError}</div>}
+                </div>
+            </div>
 
             <div className="absolute top-0 left-0 right-0 pt-safe z-20 pointer-events-none">
                 <div className="flex items-center gap-2 px-3 py-3">
@@ -335,7 +412,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                                 easing: (t) => t,
                             });
                         }
-                    } catch { }
+                    } catch (e) { }
                 }}
                 className={`absolute right-3 bottom-[17rem] z-20 touch-target grid place-items-center rounded-full shadow-md ${following ? 'bg-moss text-white border-moss border' : 'bg-surface border-line text-moss bg-surface'}`}
                 aria-label={following ? 'Centrado en mi posición (activo)' : 'Volver a centrar en mi posición'}

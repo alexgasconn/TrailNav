@@ -25,6 +25,17 @@ export function tileMaxZoom(style: MapStyleId) {
 }
 
 export function tileTemplate(style: MapStyleId) {
+    // Prefer direct network tile URLs when online to avoid relying on the
+    // custom protocol handler (which may be blocked by dev service workers).
+    try {
+        if (typeof window !== 'undefined' && navigator.onLine) {
+            // Call the url factory with template placeholders — it will interpolate
+            // the placeholders into a proper template string.
+            return TILE_SOURCES[style].url('{z}', '{x}', '{y}');
+        }
+    } catch (e) {
+        // fallthrough to protocol URL
+    }
     return `${TILE_PROTOCOL}://tile/${style}/{z}/{x}/{y}`;
 }
 
