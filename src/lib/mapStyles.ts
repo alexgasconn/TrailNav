@@ -8,7 +8,7 @@ export const MAP_STYLE_LABELS: Record<MapStyleId, string> = {
     topo: 'Topográfico',
     satellite: 'Satélite',
     carto: 'Carto (voyager)',
-    carto_voyager: 'Carto (voyager)',
+    carto_voyager: 'Carto (voyager)2',
     stamen: 'Stamen (terrain)',
     stamen_toner: 'Stamen (toner)',
     stamen_watercolor: 'Stamen (watercolor)',
