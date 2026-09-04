@@ -16,6 +16,7 @@ import {
     createUserMarkerElement,
     setRouteAlertState,
     updateUserMarkerElement,
+    MAP_STYLE_LABELS,
 } from '../lib/mapStyles';
 import { MetricPanels } from '../components/MetricPanels';
 import {
@@ -61,6 +62,13 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     const [slopeWindowMeters, setSlopeWindowMeters] = useState(200);
     const [showPanels, setShowPanels] = useState(true);
     const [mapStyle, setMapStyle] = useState<MapStyleId>('topo');
+    const [showMapMenu, setShowMapMenu] = useState(false);
+    const mapMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+
+    // smoothing refs
+    const smoothedPosRef = useRef<{ lng: number; lat: number } | null>(null);
+    const smoothedHeadingRef = useRef<number | null>(null);
+    const smoothedCourseRef = useRef<number | null>(null);
 
     const profile = useMemo(() => getRouteProfile(route), [route]);
     const routePoints = useMemo(() => getRoutePoints(route), [route]);
@@ -273,6 +281,17 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                         } catch (e) { }
                     });
                 } catch (e) { }
+                // close map menu if clicking outside
+                try {
+                    const onDocClick = (ev: MouseEvent) => {
+                        if (!showMapMenu) return;
+                        const btn = mapMenuButtonRef.current;
+                        const tgt = ev.target as Node | null;
+                        if (btn && tgt && !btn.contains(tgt)) setShowMapMenu(false);
+                    };
+                    document.addEventListener('click', onDocClick);
+                    map.on('remove', () => document.removeEventListener('click', onDocClick));
+                } catch (e) { }
             } catch (e) {
                 // eslint-disable-next-line no-console
                 console.error('Map init error', e);
@@ -307,22 +326,69 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
         const marker = userMarkerRef.current;
         if (!map || !marker || !mapReady || !position) return;
 
-        marker.setLngLat([position.lng, position.lat]);
+        // compute distance between smoothed position and new reading
+        const prev = smoothedPosRef.current;
+        const newPos = { lng: position.lng, lat: position.lat };
+        // convert to meters using turf (returns km)
+        let movedMeters = Infinity;
+        try {
+            if (prev) movedMeters = turf.distance([prev.lng, prev.lat], [newPos.lng, newPos.lat], { units: 'kilometers' }) * 1000;
+            else movedMeters = Infinity;
+        } catch (e) {
+            movedMeters = Infinity;
+        }
 
-        const metersPerPixel = (156543.03392 * Math.cos((position.lat * Math.PI) / 180)) / 2 ** map.getZoom();
+        // derive a smoothing factor: when user is nearly stationary (low speed), increase smoothing
+        const speed = (position.speed ?? 0); // m/s if provided by geo API
+        const alpha = speed < 0.8 ? 0.12 : 0.55; // lower alpha -> heavier smoothing
+
+        if (!prev) {
+            smoothedPosRef.current = newPos;
+        } else {
+            // linear interpolation
+            smoothedPosRef.current = {
+                lng: prev.lng + (newPos.lng - prev.lng) * alpha,
+                lat: prev.lat + (newPos.lat - prev.lat) * alpha,
+            };
+        }
+
+        const sm = smoothedPosRef.current!;
+        marker.setLngLat([sm.lng, sm.lat]);
+
+        // smoothing for heading/course (angles)
+        const smoothAngle = (prevA: number | null, nextA: number | null, a: number) => {
+            if (nextA == null) return prevA;
+            if (prevA == null) return nextA;
+            // shortest delta
+            let d = ((nextA - prevA + 540) % 360) - 180;
+            return (prevA + d * a + 360) % 360;
+        };
+
+        smoothedHeadingRef.current = smoothAngle(smoothedHeadingRef.current, heading ?? null, 0.35);
+        smoothedCourseRef.current = smoothAngle(smoothedCourseRef.current, course ?? null, 0.25);
+
+        // choose which orientation to display: prefer heading (device) when available, otherwise course
+        const displayOrient = smoothedHeadingRef.current ?? smoothedCourseRef.current ?? null;
+
+        const metersPerPixel = (156543.03392 * Math.cos((sm.lat * Math.PI) / 180)) / 2 ** map.getZoom();
         updateUserMarkerElement(marker.getElement(), {
-            heading,
-            course,
+            heading: smoothedHeadingRef.current ?? null,
+            course: smoothedCourseRef.current ?? null,
             accuracyPixels: position.accuracy != null ? position.accuracy / metersPerPixel : null,
         });
 
         if (following) {
-            map.easeTo({
-                center: [position.lng, position.lat],
-                bearing: rotateWithHeading ? heading ?? course ?? map.getBearing() : 0,
-                duration: 700,
-                easing: (t) => t,
-            });
+            // only animate camera for meaningful movements to avoid constant micro-pans
+            if (movedMeters > 1.2) {
+                try {
+                    map.easeTo({
+                        center: [sm.lng, sm.lat],
+                        bearing: rotateWithHeading ? (displayOrient ?? map.getBearing()) : 0,
+                        duration: 700,
+                        easing: (t) => t,
+                    });
+                } catch (e) { }
+            }
         }
     }, [position, heading, course, following, rotateWithHeading, mapReady]);
 
@@ -395,27 +461,41 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                         {showPanels ? <Eye size={22} /> : <EyeOff size={22} />}
                     </button>
                     {/* Map style cycle button */}
-                    <button
-                        onClick={async () => {
-                            const styles: MapStyleId[] = ['topo', 'carto', 'carto_voyager', 'stamen', 'stamen_toner', 'stamen_watercolor', 'esri', 'satellite'];
-                            const idx = styles.indexOf(mapStyle);
-                            const next = styles[(idx + 1) % styles.length];
-                            setMapStyle(next);
-                            try {
-                                await saveSettings({ ...(await getSettings()), mapStyle: next });
-                            } catch (e) { }
-                            try {
-                                const m = mapRef.current;
-                                if (m) {
-                                    m.setStyle(buildMapStyle(next));
-                                }
-                            } catch (e) { }
-                        }}
-                        className="pointer-events-auto touch-target grid place-items-center rounded-xl border shadow-sm bg-surface/95 border-line text-ink"
-                        aria-label="Cambiar estilo de mapa"
-                    >
-                        <Layers size={20} />
-                    </button>
+                    <div className="relative">
+                        <button
+                            ref={mapMenuButtonRef}
+                            onClick={() => setShowMapMenu((v) => !v)}
+                            className="pointer-events-auto touch-target grid place-items-center rounded-xl border shadow-sm bg-surface/95 border-line text-ink"
+                            aria-label="Cambiar estilo de mapa"
+                        >
+                            <Layers size={20} />
+                        </button>
+                        {showMapMenu && (
+                            <div data-map-menu="true" className="absolute right-0 mt-2 w-44 bg-surface border border-line rounded-xl shadow-lg z-40">
+                                {(
+                                    ['topo', 'carto', 'carto_voyager', 'stamen', 'stamen_toner', 'stamen_watercolor', 'esri', 'satellite'] as MapStyleId[]
+                                ).map((s) => (
+                                    <button
+                                        key={s}
+                                        onClick={async () => {
+                                            setShowMapMenu(false);
+                                            setMapStyle(s);
+                                            try {
+                                                await saveSettings({ ...(await getSettings()), mapStyle: s });
+                                            } catch (e) { }
+                                            try {
+                                                const m = mapRef.current;
+                                                if (m) m.setStyle(buildMapStyle(s));
+                                            } catch (e) { }
+                                        }}
+                                        className={`w-full text-left px-3 py-2 hover:bg-surface/80 ${mapStyle === s ? 'font-semibold' : ''}`}
+                                    >
+                                        {MAP_STYLE_LABELS[s] ?? s}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="h-1 mx-3 rounded-full bg-line overflow-hidden">
@@ -600,96 +680,97 @@ function buildInfoWindows(
     metrics: SessionMetrics | null,
     windowMeters: number,
     setWindowMeters: (v: number) => void
-) {
-    const windows: { id: string; title: string; content: React.ReactNode }[] = [];
-
-    // Profile window
-    if (profile.hasElevation) {
-        windows.push({
-            id: 'profile',
-            title: 'Perfil',
-            content: <ProfileChart profile={profile} height={96} currentDistance={metrics?.distanceDone ?? null} />,
-        });
+                try {
+    const onDocClick = (ev: MouseEvent) => {
+        const btn = mapMenuButtonRef.current;
+        const tgt = ev.target as Node | null;
+        const menu = document.querySelector('[data-map-menu]');
+        if (btn && tgt && (btn.contains(tgt) || (menu && menu.contains && menu.contains(tgt)))) return;
+        setShowMapMenu(false);
+    };
+    document.addEventListener('click', onDocClick);
+    map.on('remove', () => document.removeEventListener('click', onDocClick));
+} catch (e) { }
     }
 
-    // Weather window
-    if (route) {
-        const etaMinutes = metrics?.remainingSeconds != null ? Math.max(0, Math.round(metrics.remainingSeconds / 60)) : 0;
-        windows.push({
-            id: 'weather',
-            title: 'Tiempo',
-            content: <RouteWeatherPanel route={route} etaMinutes={etaMinutes} />,
-        });
+// Weather window
+if (route) {
+    const etaMinutes = metrics?.remainingSeconds != null ? Math.max(0, Math.round(metrics.remainingSeconds / 60)) : 0;
+    windows.push({
+        id: 'weather',
+        title: 'Tiempo',
+        content: <RouteWeatherPanel route={route} etaMinutes={etaMinutes} />,
+    });
+}
+
+// Slope / ascent-descent detail window
+if (profile.hasElevation && metrics) {
+    const center = Math.max(0, Math.min(profile.totalDistance, metrics.distanceDone || 0));
+    const start = Math.max(0, center - windowMeters / 2);
+    const end = Math.min(profile.totalDistance, start + windowMeters);
+
+    const startSample = sampleProfile(profile, start);
+    const endSample = sampleProfile(profile, end);
+
+    let avgSlope = 0;
+    let gained = 0;
+    let length = Math.max(0.001, end - start);
+
+    if (startSample && endSample) {
+        avgSlope = ((endSample.elevation - startSample.elevation) / length) * 100;
+        // approximate accumulated positive/negative within window via cumulative arrays
+        const si = indexAtDistance(profile, start);
+        const ei = indexAtDistance(profile, end);
+        const ascentAtStart = profile.cumulativeAscent[si] ?? 0;
+        const ascentAtEnd = profile.cumulativeAscent[ei] ?? 0;
+        gained = Math.max(0, ascentAtEnd - ascentAtStart);
     }
 
-    // Slope / ascent-descent detail window
-    if (profile.hasElevation && metrics) {
-        const center = Math.max(0, Math.min(profile.totalDistance, metrics.distanceDone || 0));
-        const start = Math.max(0, center - windowMeters / 2);
-        const end = Math.min(profile.totalDistance, start + windowMeters);
+    const direction = avgSlope > 0.5 ? 'Subida' : avgSlope < -0.5 ? 'Bajada' : 'Plano';
 
-        const startSample = sampleProfile(profile, start);
-        const endSample = sampleProfile(profile, end);
-
-        let avgSlope = 0;
-        let gained = 0;
-        let length = Math.max(0.001, end - start);
-
-        if (startSample && endSample) {
-            avgSlope = ((endSample.elevation - startSample.elevation) / length) * 100;
-            // approximate accumulated positive/negative within window via cumulative arrays
-            const si = indexAtDistance(profile, start);
-            const ei = indexAtDistance(profile, end);
-            const ascentAtStart = profile.cumulativeAscent[si] ?? 0;
-            const ascentAtEnd = profile.cumulativeAscent[ei] ?? 0;
-            gained = Math.max(0, ascentAtEnd - ascentAtStart);
-        }
-
-        const direction = avgSlope > 0.5 ? 'Subida' : avgSlope < -0.5 ? 'Bajada' : 'Plano';
-
-        const content = (
-            <section className="bg-surface border border-line rounded-2xl p-4">
-                <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-ink">{direction}</p>
-                    <div className="flex items-center gap-2">
-                        <label className="text-xs text-ink-faint">Ventana (m)</label>
-                        <input
-                            type="number"
-                            value={windowMeters}
-                            onChange={(e) => {
-                                const v = Number(e.target.value) || 0;
-                                setWindowMeters(Math.max(50, Math.min(5000, v)));
-                            }}
-                            className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm"
-                        />
-                    </div>
+    const content = (
+        <section className="bg-surface border border-line rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-ink">{direction}</p>
+                <div className="flex items-center gap-2">
+                    <label className="text-xs text-ink-faint">Ventana (m)</label>
+                    <input
+                        type="number"
+                        value={windowMeters}
+                        onChange={(e) => {
+                            const v = Number(e.target.value) || 0;
+                            setWindowMeters(Math.max(50, Math.min(5000, v)));
+                        }}
+                        className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm"
+                    />
                 </div>
+            </div>
 
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                    <div className="bg-canvas border border-line rounded-xl p-3">
-                        <p className="text-[11px] text-ink-faint">% medio</p>
-                        <p className="text-xl font-semibold tabular mt-1">{formatPercent(avgSlope)}</p>
-                    </div>
-                    <div className="bg-canvas border border-line rounded-xl p-3">
-                        <p className="text-[11px] text-ink-faint">Desnivel</p>
-                        <p className="text-xl font-semibold tabular mt-1">{formatSignedElevation(gained)}</p>
-                    </div>
-                    <div className="bg-canvas border border-line rounded-xl p-3">
-                        <p className="text-[11px] text-ink-faint">Longitud</p>
-                        <p className="text-xl font-semibold tabular mt-1">{formatDistance(length)}</p>
-                    </div>
+            <div className="grid grid-cols-3 gap-3 mt-3">
+                <div className="bg-canvas border border-line rounded-xl p-3">
+                    <p className="text-[11px] text-ink-faint">% medio</p>
+                    <p className="text-xl font-semibold tabular mt-1">{formatPercent(avgSlope)}</p>
                 </div>
-
-                <div className="mt-3">
-                    <ProfileChart profile={profile} height={72} currentDistance={metrics.distanceDone ?? null} />
+                <div className="bg-canvas border border-line rounded-xl p-3">
+                    <p className="text-[11px] text-ink-faint">Desnivel</p>
+                    <p className="text-xl font-semibold tabular mt-1">{formatSignedElevation(gained)}</p>
                 </div>
-            </section>
-        );
+                <div className="bg-canvas border border-line rounded-xl p-3">
+                    <p className="text-[11px] text-ink-faint">Longitud</p>
+                    <p className="text-xl font-semibold tabular mt-1">{formatDistance(length)}</p>
+                </div>
+            </div>
 
-        windows.push({ id: 'slope', title: 'Subida/Bajada', content });
-    }
+            <div className="mt-3">
+                <ProfileChart profile={profile} height={72} currentDistance={metrics.distanceDone ?? null} />
+            </div>
+        </section>
+    );
 
-    return windows;
+    windows.push({ id: 'slope', title: 'Subida/Bajada', content });
+}
+
+return windows;
 }
 
 function EmptyNavigationState({ hydrated, onNavigate }: { hydrated: boolean; onNavigate: (s: Screen) => void }) {
