@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
-import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Layers, Eye, EyeOff } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Layers, Eye, EyeOff, Satellite } from 'lucide-react';
 import { Screen } from '../App';
 import { Route, getSettings, saveSettings, MapStyleId } from '../lib/db';
 import { SessionMetrics, useNavigationSession } from '../state/navigationSession';
@@ -680,18 +680,8 @@ function buildInfoWindows(
     metrics: SessionMetrics | null,
     windowMeters: number,
     setWindowMeters: (v: number) => void
-                try {
-    const onDocClick = (ev: MouseEvent) => {
-        const btn = mapMenuButtonRef.current;
-        const tgt = ev.target as Node | null;
-        const menu = document.querySelector('[data-map-menu]');
-        if (btn && tgt && (btn.contains(tgt) || (menu && menu.contains && menu.contains(tgt)))) return;
-        setShowMapMenu(false);
-    };
-    document.addEventListener('click', onDocClick);
-    map.on('remove', () => document.removeEventListener('click', onDocClick));
-} catch (e) { }
-    }
+): Array<{ id: string; title: string; content: React.ReactNode }> {
+    const windows: Array<{ id: string; title: string; content: React.ReactNode }> = [];
 
 // Weather window
 if (route) {
