@@ -657,18 +657,12 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
             ],
         },
         {
-            id: 'speed',
-            title: 'Ritmo',
+            id: 'time_rhythm',
+            title: 'Tiempo y ritmo',
             items: [
                 { label: 'Velocidad', value: metrics.currentSpeed != null ? formatSpeed(metrics.currentSpeed) : '—' },
                 { label: 'Media', value: metrics.averageSpeed != null ? formatSpeed(metrics.averageSpeed) : '—' },
                 { label: 'Ritmo medio', value: metrics.paceSeconds != null ? formatPace(metrics.paceSeconds) : '—' },
-            ],
-        },
-        {
-            id: 'time',
-            title: 'Tiempo',
-            items: [
                 { label: 'En movimiento', value: formatClock(metrics.movingSeconds) },
                 { label: 'Restante', value: metrics.remainingSeconds != null ? formatClock(metrics.remainingSeconds) : '—' },
                 { label: 'Llegada', value: metrics.arrivalTimestamp != null ? formatTimeOfDay(metrics.arrivalTimestamp) : '—' },
@@ -737,7 +731,7 @@ function buildInfoWindows(
             </div>
         );
 
-        windows.push({ id: 'slope', title: 'Subida/Bajada', content });
+        windows.push({ id: 'slope', title: '', content });
     }
 
     return windows;
