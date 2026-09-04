@@ -732,42 +732,9 @@ function buildInfoWindows(
         const direction = avgSlope > 0.5 ? 'Subida' : avgSlope < -0.5 ? 'Bajada' : 'Plano';
 
         const content = (
-            <section className="bg-surface border border-line rounded-2xl p-4">
-                <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-ink">{direction}</p>
-                    <div className="flex items-center gap-2">
-                        <label className="text-xs text-ink-faint">Ventana (m)</label>
-                        <input
-                            type="number"
-                            value={windowMeters}
-                            onChange={(e) => {
-                                const v = Number(e.target.value) || 0;
-                                setWindowMeters(Math.max(50, Math.min(5000, v)));
-                            }}
-                            className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm"
-                        />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                    <div className="bg-canvas border border-line rounded-xl p-3">
-                        <p className="text-[11px] text-ink-faint">% medio</p>
-                        <p className="text-xl font-semibold tabular mt-1">{formatPercent(avgSlope)}</p>
-                    </div>
-                    <div className="bg-canvas border border-line rounded-xl p-3">
-                        <p className="text-[11px] text-ink-faint">Desnivel</p>
-                        <p className="text-xl font-semibold tabular mt-1">{formatSignedElevation(gained)}</p>
-                    </div>
-                    <div className="bg-canvas border border-line rounded-xl p-3">
-                        <p className="text-[11px] text-ink-faint">Longitud</p>
-                        <p className="text-xl font-semibold tabular mt-1">{formatDistance(length)}</p>
-                    </div>
-                </div>
-
-                <div className="mt-3">
-                    <ProfileChart profile={profile} height={72} currentDistance={metrics.distanceDone ?? null} />
-                </div>
-            </section>
+            <div className="p-0">
+                <ProfileChart profile={profile} height={72} currentDistance={metrics.distanceDone ?? null} showPoints={false} showSegments={false} showColoredFill={false} />
+            </div>
         );
 
         windows.push({ id: 'slope', title: 'Subida/Bajada', content });

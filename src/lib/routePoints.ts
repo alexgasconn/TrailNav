@@ -217,9 +217,6 @@ export function getRoutePoints(route: { id: string; geoJson?: any }): RoutePoint
     points.push(...gpxWaypoints);
     points.push(...extractSummits(profile));
 
-    // Los giros solo se derivan si el GPX no aporta ya suficientes puntos propios.
-    if (gpxWaypoints.length < 8) points.push(...extractTurns(profile));
-
     const result = points
         .filter((point) => Number.isFinite(point.distance))
         .sort((a, b) => a.distance - b.distance);
