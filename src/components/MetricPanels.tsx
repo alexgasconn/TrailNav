@@ -1,5 +1,26 @@
 import React, { useCallback, useRef, useState } from 'react';
 
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+    constructor(props: any) {
+        super(props);
+        this.state = { hasError: false };
+    }
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+    componentDidCatch(error: any) {
+        // log to console for diagnostics
+        // eslint-disable-next-line no-console
+        console.error('Metric panel error:', error);
+    }
+    render() {
+        if (this.state.hasError) {
+            return <div className="bg-surface border border-line rounded-xl p-3 text-sm text-ink-soft">Error al mostrar este panel</div>;
+        }
+        return this.props.children as any;
+    }
+}
+
 export interface MetricItem {
     label: string;
     value: string;
@@ -49,7 +70,7 @@ export function MetricPanels({ panels }: { panels: MetricPanel[] }) {
                     <section key={panel.id} className="w-full shrink-0 snap-center px-4">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint mb-2">{panel.title}</p>
                         {panel.content ? (
-                            <div>{panel.content}</div>
+                            <ErrorBoundary>{panel.content}</ErrorBoundary>
                         ) : (
                             <div className={`grid gap-2 ${panel.items && panel.items.length > 3 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                                 {panel.items?.map((item) => (

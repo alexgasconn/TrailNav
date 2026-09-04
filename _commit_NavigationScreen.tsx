@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
-import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Satellite, Eye, EyeOff } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Satellite } from 'lucide-react';
 import { Screen } from '../App';
 import { Route, getSettings } from '../lib/db';
 import { SessionMetrics, useNavigationSession } from '../state/navigationSession';
@@ -29,8 +29,6 @@ import {
     formatTimeOfDay,
 } from '../lib/format';
 import ProfileChart from '../components/ProfileChart';
-import { RouteWeatherPanel } from '../components/RouteWeatherPanel';
-import { sampleProfile, indexAtDistance } from '../lib/routeProfile';
 
 export function NavigationScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) => void }) {
     const session = useNavigationSession();
@@ -57,8 +55,6 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     const [following, setFollowing] = useState(true);
     const [rotateWithHeading, setRotateWithHeading] = useState(true);
     const [confirmFinish, setConfirmFinish] = useState(false);
-    const [slopeWindowMeters, setSlopeWindowMeters] = useState(200);
-    const [showPanels, setShowPanels] = useState(true);
 
     const profile = useMemo(() => getRouteProfile(route), [route]);
     const routePoints = useMemo(() => getRoutePoints(route), [route]);
@@ -106,7 +102,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                             .setLngLat(point.coordinate)
                             .setPopup(
                                 new maplibregl.Popup({ offset: 16, closeButton: false }).setText(
-                                    `${point.name} · km ${(point.distance / 1000).toFixed(1)}`
+                                    `${point.name} ┬À km ${(point.distance / 1000).toFixed(1)}`
                                 )
                             )
                             .addTo(map);
@@ -221,7 +217,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [route.id, initAttempt]);
 
-    // Posición, cono de brújula y flecha de desplazamiento del usuario.
+    // Posici├│n, cono de br├║jula y flecha de desplazamiento del usuario.
     useEffect(() => {
         const map = mapRef.current;
         const marker = userMarkerRef.current;
@@ -246,12 +242,6 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
         }
     }, [position, heading, course, following, rotateWithHeading, mapReady]);
 
-    useEffect(() => {
-        try {
-            mapRef.current?.resize();
-        } catch { }
-    }, [showPanels]);
-
     // Traza ya recorrida sobre la ruta.
     useEffect(() => {
         const map = mapRef.current;
@@ -275,7 +265,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
         setRouteAlertState(map, Boolean(metrics?.offRoute));
     }, [metrics?.offRoute, mapReady]);
 
-    const panels = useMemo(() => buildPanels(metrics, profile, route, slopeWindowMeters, setSlopeWindowMeters), [metrics, profile, route, slopeWindowMeters]);
+    const panels = useMemo(() => buildPanels(metrics), [metrics]);
 
     return (
         <div className="w-full h-full relative overflow-hidden bg-canvas">
@@ -286,7 +276,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     <button
                         onClick={() => onNavigate('home')}
                         className="pointer-events-auto touch-target grid place-items-center bg-surface/95 border border-line rounded-xl shadow-sm text-ink"
-                        aria-label="Minimizar navegación manteniendo la sesión activa"
+                        aria-label="Minimizar navegaci├│n manteniendo la sesi├│n activa"
                     >
                         <ChevronDown size={22} />
                     </button>
@@ -301,16 +291,9 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     <button
                         onClick={() => setRotateWithHeading((value) => !value)}
                         className={`pointer-events-auto touch-target grid place-items-center rounded-xl border shadow-sm ${rotateWithHeading ? 'bg-moss border-moss text-white' : 'bg-surface/95 border-line text-ink'}`}
-                        aria-label={rotateWithHeading ? 'Fijar el mapa al norte' : 'Rotar el mapa con la brújula'}
+                        aria-label={rotateWithHeading ? 'Fijar el mapa al norte' : 'Rotar el mapa con la br├║jula'}
                     >
                         <Compass size={22} />
-                    </button>
-                    <button
-                        onClick={() => setShowPanels((v) => !v)}
-                        className={`pointer-events-auto touch-target grid place-items-center rounded-xl border shadow-sm ${showPanels ? 'bg-surface/95 border-line text-ink' : 'bg-surface/95 border-line text-ink'}`}
-                        aria-label={showPanels ? 'Ocultar paneles' : 'Mostrar paneles'}
-                    >
-                        {showPanels ? <Eye size={22} /> : <EyeOff size={22} />}
                     </button>
                 </div>
 
@@ -322,26 +305,15 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 </div>
             </div>
 
-            <button
-                onClick={() => {
-                    setFollowing(true);
-                    try {
-                        const map = mapRef.current;
-                        if (map && position) {
-                            map.easeTo({
-                                center: [position.lng, position.lat],
-                                bearing: rotateWithHeading ? heading ?? course ?? map.getBearing() : 0,
-                                duration: 700,
-                                easing: (t) => t,
-                            });
-                        }
-                    } catch { }
-                }}
-                className={`absolute right-3 bottom-[17rem] z-20 touch-target grid place-items-center rounded-full shadow-md ${following ? 'bg-moss text-white border-moss border' : 'bg-surface border-line text-moss bg-surface'}`}
-                aria-label={following ? 'Centrado en mi posición (activo)' : 'Volver a centrar en mi posición'}
-            >
-                <Crosshair size={22} />
-            </button>
+            {!following && (
+                <button
+                    onClick={() => setFollowing(true)}
+                    className="absolute right-3 bottom-[17rem] z-20 touch-target grid place-items-center bg-surface border border-line rounded-full shadow-md text-moss"
+                    aria-label="Volver a centrar en mi posici├│n"
+                >
+                    <Crosshair size={22} />
+                </button>
+            )}
 
             <div className="absolute bottom-0 left-0 right-0 z-20 pb-safe">
                 {metrics?.offRoute && (
@@ -367,11 +339,12 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 )}
 
                 <div className="bg-surface-soft/95 backdrop-blur border-t border-line pt-3 pb-3">
-                    {showPanels && (
+                    {profile.hasElevation && (
                         <div className="px-4 pb-2">
-                            <MetricPanels panels={panels} />
+                            <ProfileChart profile={profile} height={72} currentDistance={metrics?.distanceDone ?? null} />
                         </div>
                     )}
+                    <MetricPanels panels={panels} />
 
                     <div className="flex gap-2 px-4 pt-4">
                         <button
@@ -395,10 +368,10 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
             {confirmFinish && (
                 <div className="absolute inset-0 z-30 bg-ink/40 flex items-end justify-center p-4">
                     <div className="w-full max-w-sm bg-surface border border-line rounded-2xl p-5">
-                        <h2 className="text-base font-semibold text-ink">Finalizar navegación</h2>
+                        <h2 className="text-base font-semibold text-ink">Finalizar navegaci├│n</h2>
                         <p className="text-sm text-ink-soft mt-2">
                             Llevas {formatDistance(metrics?.distanceDone ?? 0)} en {formatClock(metrics?.movingSeconds ?? 0)}. La
-                            sesión se cerrará y el progreso se descartará.
+                            sesi├│n se cerrar├í y el progreso se descartar├í.
                         </p>
                         <div className="flex gap-2 mt-5">
                             <button onClick={() => setConfirmFinish(false)} className="flex-1 h-12 rounded-xl border border-line font-medium">
@@ -422,10 +395,10 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     );
 }
 
-function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof getRouteProfile>, route: Route, windowMeters: number, setWindowMeters: (v: number) => void) {
+function buildPanels(metrics: SessionMetrics | null) {
     if (!metrics) return [];
 
-    const base = [
+    return [
         {
             id: 'progress',
             title: 'Progreso',
@@ -437,25 +410,25 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
         },
         {
             id: 'elevation',
-            title: 'Elevación',
+            title: 'Elevaci├│n',
             items: [
-                { label: 'Altitud', value: metrics.altitude != null ? formatElevation(metrics.altitude) : '—' },
+                { label: 'Altitud', value: metrics.altitude != null ? formatElevation(metrics.altitude) : 'ÔÇö' },
                 {
                     label: 'D+ acumulado',
-                    value: metrics.ascentDone != null ? formatSignedElevation(metrics.ascentDone) : '—',
+                    value: metrics.ascentDone != null ? formatSignedElevation(metrics.ascentDone) : 'ÔÇö',
                     tone: 'accent' as const,
                 },
-                { label: 'D+ restante', value: metrics.ascentRemaining != null ? formatElevation(metrics.ascentRemaining) : '—' },
-                { label: 'D− restante', value: metrics.descentRemaining != null ? formatElevation(metrics.descentRemaining) : '—' },
+                { label: 'D+ restante', value: metrics.ascentRemaining != null ? formatElevation(metrics.ascentRemaining) : 'ÔÇö' },
+                { label: 'DÔêÆ restante', value: metrics.descentRemaining != null ? formatElevation(metrics.descentRemaining) : 'ÔÇö' },
             ],
         },
         {
             id: 'speed',
             title: 'Ritmo',
             items: [
-                { label: 'Velocidad', value: metrics.currentSpeed != null ? formatSpeed(metrics.currentSpeed) : '—' },
-                { label: 'Media', value: metrics.averageSpeed != null ? formatSpeed(metrics.averageSpeed) : '—' },
-                { label: 'Ritmo medio', value: metrics.paceSeconds != null ? formatPace(metrics.paceSeconds) : '—' },
+                { label: 'Velocidad', value: metrics.currentSpeed != null ? formatSpeed(metrics.currentSpeed) : 'ÔÇö' },
+                { label: 'Media', value: metrics.averageSpeed != null ? formatSpeed(metrics.averageSpeed) : 'ÔÇö' },
+                { label: 'Ritmo medio', value: metrics.paceSeconds != null ? formatPace(metrics.paceSeconds) : 'ÔÇö' },
             ],
         },
         {
@@ -463,127 +436,24 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
             title: 'Tiempo',
             items: [
                 { label: 'En movimiento', value: formatClock(metrics.movingSeconds) },
-                { label: 'Restante', value: metrics.remainingSeconds != null ? formatClock(metrics.remainingSeconds) : '—' },
-                { label: 'Llegada', value: metrics.arrivalTimestamp != null ? formatTimeOfDay(metrics.arrivalTimestamp) : '—' },
+                { label: 'Restante', value: metrics.remainingSeconds != null ? formatClock(metrics.remainingSeconds) : 'ÔÇö' },
+                { label: 'Llegada', value: metrics.arrivalTimestamp != null ? formatTimeOfDay(metrics.arrivalTimestamp) : 'ÔÇö' },
             ],
         },
         {
             id: 'gps',
-            title: 'Señal y ruta',
+            title: 'Se├▒al y ruta',
             items: [
                 {
-                    label: 'Precisión',
-                    value: metrics.accuracy != null ? formatDistance(metrics.accuracy) : '—',
+                    label: 'Precisi├│n',
+                    value: metrics.accuracy != null ? formatDistance(metrics.accuracy) : 'ÔÇö',
                     tone: metrics.accuracy != null && metrics.accuracy > 25 ? ('warn' as const) : ('default' as const),
                 },
-                { label: 'Desvío', value: metrics.distanceFromRoute != null ? formatDistance(metrics.distanceFromRoute) : '—' },
+                { label: 'Desv├¡o', value: metrics.distanceFromRoute != null ? formatDistance(metrics.distanceFromRoute) : 'ÔÇö' },
                 { label: 'Total ruta', value: formatDistance(metrics.totalDistance) },
             ],
         },
     ];
-
-    // append info windows (profile, weather, slope) as panels with content
-    const info = buildInfoWindows(profile, route, metrics, windowMeters, setWindowMeters).map((w) => ({ id: w.id, title: w.title, content: w.content }));
-
-    return [...base, ...info];
-}
-
-function buildInfoWindows(
-    profile: ReturnType<typeof getRouteProfile>,
-    route: Route,
-    metrics: SessionMetrics | null,
-    windowMeters: number,
-    setWindowMeters: (v: number) => void
-) {
-    const windows: { id: string; title: string; content: React.ReactNode }[] = [];
-
-    // Profile window
-    if (profile.hasElevation) {
-        windows.push({
-            id: 'profile',
-            title: 'Perfil',
-            content: <ProfileChart profile={profile} height={96} currentDistance={metrics?.distanceDone ?? null} />,
-        });
-    }
-
-    // Weather window
-    if (route) {
-        const etaMinutes = metrics?.remainingSeconds != null ? Math.max(0, Math.round(metrics.remainingSeconds / 60)) : 0;
-        windows.push({
-            id: 'weather',
-            title: 'Tiempo',
-            content: <RouteWeatherPanel route={route} etaMinutes={etaMinutes} />,
-        });
-    }
-
-    // Slope / ascent-descent detail window
-    if (profile.hasElevation && metrics) {
-        const center = Math.max(0, Math.min(profile.totalDistance, metrics.distanceDone || 0));
-        const start = Math.max(0, center - windowMeters / 2);
-        const end = Math.min(profile.totalDistance, start + windowMeters);
-
-        const startSample = sampleProfile(profile, start);
-        const endSample = sampleProfile(profile, end);
-
-        let avgSlope = 0;
-        let gained = 0;
-        let length = Math.max(0.001, end - start);
-
-        if (startSample && endSample) {
-            avgSlope = ((endSample.elevation - startSample.elevation) / length) * 100;
-            // approximate accumulated positive/negative within window via cumulative arrays
-            const si = indexAtDistance(profile, start);
-            const ei = indexAtDistance(profile, end);
-            const ascentAtStart = profile.cumulativeAscent[si] ?? 0;
-            const ascentAtEnd = profile.cumulativeAscent[ei] ?? 0;
-            gained = Math.max(0, ascentAtEnd - ascentAtStart);
-        }
-
-        const direction = avgSlope > 0.5 ? 'Subida' : avgSlope < -0.5 ? 'Bajada' : 'Plano';
-
-        const content = (
-            <section className="bg-surface border border-line rounded-2xl p-4">
-                <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-ink">{direction}</p>
-                    <div className="flex items-center gap-2">
-                        <label className="text-xs text-ink-faint">Ventana (m)</label>
-                        <input
-                            type="number"
-                            value={windowMeters}
-                            onChange={(e) => {
-                                const v = Number(e.target.value) || 0;
-                                setWindowMeters(Math.max(50, Math.min(5000, v)));
-                            }}
-                            className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm"
-                        />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                    <div className="bg-canvas border border-line rounded-xl p-3">
-                        <p className="text-[11px] text-ink-faint">% medio</p>
-                        <p className="text-xl font-semibold tabular mt-1">{formatPercent(avgSlope)}</p>
-                    </div>
-                    <div className="bg-canvas border border-line rounded-xl p-3">
-                        <p className="text-[11px] text-ink-faint">Desnivel</p>
-                        <p className="text-xl font-semibold tabular mt-1">{formatSignedElevation(gained)}</p>
-                    </div>
-                    <div className="bg-canvas border border-line rounded-xl p-3">
-                        <p className="text-[11px] text-ink-faint">Longitud</p>
-                        <p className="text-xl font-semibold tabular mt-1">{formatDistance(length)}</p>
-                    </div>
-                </div>
-
-                <div className="mt-3">
-                    <ProfileChart profile={profile} height={72} currentDistance={metrics.distanceDone ?? null} />
-                </div>
-            </section>
-        );
-
-        windows.push({ id: 'slope', title: 'Subida/Bajada', content });
-    }
-
-    return windows;
 }
 
 function EmptyNavigationState({ hydrated, onNavigate }: { hydrated: boolean; onNavigate: (s: Screen) => void }) {
@@ -592,9 +462,9 @@ function EmptyNavigationState({ hydrated, onNavigate }: { hydrated: boolean; onN
             <Compass size={40} className="text-ink-faint" />
             <div>
                 <h1 className="text-lg font-semibold text-ink">
-                    {hydrated ? 'No hay ninguna navegación activa' : 'Recuperando sesión…'}
+                    {hydrated ? 'No hay ninguna navegaci├│n activa' : 'Recuperando sesi├│nÔÇª'}
                 </h1>
-                <p className="text-sm text-ink-soft mt-2">Elige una ruta guardada y pulsa «Navegar» para iniciar la actividad.</p>
+                <p className="text-sm text-ink-soft mt-2">Elige una ruta guardada y pulsa ┬½Navegar┬╗ para iniciar la actividad.</p>
             </div>
             <button onClick={() => onNavigate('home')} className="h-12 px-5 rounded-xl bg-moss text-white font-semibold">
                 Ver mis rutas
