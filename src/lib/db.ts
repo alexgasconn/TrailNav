@@ -13,7 +13,15 @@ export interface Route {
   createdAt: number;
 }
 
-export type MapStyleId = 'topo' | 'satellite' | 'carto' | 'stamen';
+export type MapStyleId =
+  | 'topo'
+  | 'satellite'
+  | 'carto'
+  | 'stamen'
+  | 'carto_voyager'
+  | 'stamen_toner'
+  | 'stamen_watercolor'
+  | 'esri';
 
 export interface MapRegion {
   id: string;

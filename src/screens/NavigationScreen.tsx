@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
-import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Satellite, Eye, EyeOff } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Layers, Eye, EyeOff } from 'lucide-react';
 import { Screen } from '../App';
 import { Route, getSettings, saveSettings, MapStyleId } from '../lib/db';
 import { SessionMetrics, useNavigationSession } from '../state/navigationSession';
@@ -397,7 +397,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     {/* Map style cycle button */}
                     <button
                         onClick={async () => {
-                            const styles: MapStyleId[] = ['topo', 'carto', 'stamen', 'satellite'];
+                            const styles: MapStyleId[] = ['topo', 'carto', 'carto_voyager', 'stamen', 'stamen_toner', 'stamen_watercolor', 'esri', 'satellite'];
                             const idx = styles.indexOf(mapStyle);
                             const next = styles[(idx + 1) % styles.length];
                             setMapStyle(next);
@@ -414,7 +414,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                         className="pointer-events-auto touch-target grid place-items-center rounded-xl border shadow-sm bg-surface/95 border-line text-ink"
                         aria-label="Cambiar estilo de mapa"
                     >
-                        <Satellite size={20} />
+                        <Layers size={20} />
                     </button>
                 </div>
 
