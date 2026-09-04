@@ -287,7 +287,10 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                         if (!showMapMenu) return;
                         const btn = mapMenuButtonRef.current;
                         const tgt = ev.target as Node | null;
-                        if (btn && tgt && !btn.contains(tgt)) setShowMapMenu(false);
+                        const menu = document.querySelector('[data-map-menu]');
+                        // don't close if clicking the button or inside the menu
+                        if (btn && tgt && (btn.contains(tgt) || (menu && menu.contains && menu.contains(tgt)))) return;
+                        setShowMapMenu(false);
                     };
                     document.addEventListener('click', onDocClick);
                     map.on('remove', () => document.removeEventListener('click', onDocClick));
@@ -683,84 +686,84 @@ function buildInfoWindows(
 ): Array<{ id: string; title: string; content: React.ReactNode }> {
     const windows: Array<{ id: string; title: string; content: React.ReactNode }> = [];
 
-// Weather window
-if (route) {
-    const etaMinutes = metrics?.remainingSeconds != null ? Math.max(0, Math.round(metrics.remainingSeconds / 60)) : 0;
-    windows.push({
-        id: 'weather',
-        title: 'Tiempo',
-        content: <RouteWeatherPanel route={route} etaMinutes={etaMinutes} />,
-    });
-}
-
-// Slope / ascent-descent detail window
-if (profile.hasElevation && metrics) {
-    const center = Math.max(0, Math.min(profile.totalDistance, metrics.distanceDone || 0));
-    const start = Math.max(0, center - windowMeters / 2);
-    const end = Math.min(profile.totalDistance, start + windowMeters);
-
-    const startSample = sampleProfile(profile, start);
-    const endSample = sampleProfile(profile, end);
-
-    let avgSlope = 0;
-    let gained = 0;
-    let length = Math.max(0.001, end - start);
-
-    if (startSample && endSample) {
-        avgSlope = ((endSample.elevation - startSample.elevation) / length) * 100;
-        // approximate accumulated positive/negative within window via cumulative arrays
-        const si = indexAtDistance(profile, start);
-        const ei = indexAtDistance(profile, end);
-        const ascentAtStart = profile.cumulativeAscent[si] ?? 0;
-        const ascentAtEnd = profile.cumulativeAscent[ei] ?? 0;
-        gained = Math.max(0, ascentAtEnd - ascentAtStart);
+    // Weather window
+    if (route) {
+        const etaMinutes = metrics?.remainingSeconds != null ? Math.max(0, Math.round(metrics.remainingSeconds / 60)) : 0;
+        windows.push({
+            id: 'weather',
+            title: 'Tiempo',
+            content: <RouteWeatherPanel route={route} etaMinutes={etaMinutes} />,
+        });
     }
 
-    const direction = avgSlope > 0.5 ? 'Subida' : avgSlope < -0.5 ? 'Bajada' : 'Plano';
+    // Slope / ascent-descent detail window
+    if (profile.hasElevation && metrics) {
+        const center = Math.max(0, Math.min(profile.totalDistance, metrics.distanceDone || 0));
+        const start = Math.max(0, center - windowMeters / 2);
+        const end = Math.min(profile.totalDistance, start + windowMeters);
 
-    const content = (
-        <section className="bg-surface border border-line rounded-2xl p-4">
-            <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-ink">{direction}</p>
-                <div className="flex items-center gap-2">
-                    <label className="text-xs text-ink-faint">Ventana (m)</label>
-                    <input
-                        type="number"
-                        value={windowMeters}
-                        onChange={(e) => {
-                            const v = Number(e.target.value) || 0;
-                            setWindowMeters(Math.max(50, Math.min(5000, v)));
-                        }}
-                        className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm"
-                    />
+        const startSample = sampleProfile(profile, start);
+        const endSample = sampleProfile(profile, end);
+
+        let avgSlope = 0;
+        let gained = 0;
+        let length = Math.max(0.001, end - start);
+
+        if (startSample && endSample) {
+            avgSlope = ((endSample.elevation - startSample.elevation) / length) * 100;
+            // approximate accumulated positive/negative within window via cumulative arrays
+            const si = indexAtDistance(profile, start);
+            const ei = indexAtDistance(profile, end);
+            const ascentAtStart = profile.cumulativeAscent[si] ?? 0;
+            const ascentAtEnd = profile.cumulativeAscent[ei] ?? 0;
+            gained = Math.max(0, ascentAtEnd - ascentAtStart);
+        }
+
+        const direction = avgSlope > 0.5 ? 'Subida' : avgSlope < -0.5 ? 'Bajada' : 'Plano';
+
+        const content = (
+            <section className="bg-surface border border-line rounded-2xl p-4">
+                <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-ink">{direction}</p>
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs text-ink-faint">Ventana (m)</label>
+                        <input
+                            type="number"
+                            value={windowMeters}
+                            onChange={(e) => {
+                                const v = Number(e.target.value) || 0;
+                                setWindowMeters(Math.max(50, Math.min(5000, v)));
+                            }}
+                            className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm"
+                        />
+                    </div>
                 </div>
-            </div>
 
-            <div className="grid grid-cols-3 gap-3 mt-3">
-                <div className="bg-canvas border border-line rounded-xl p-3">
-                    <p className="text-[11px] text-ink-faint">% medio</p>
-                    <p className="text-xl font-semibold tabular mt-1">{formatPercent(avgSlope)}</p>
+                <div className="grid grid-cols-3 gap-3 mt-3">
+                    <div className="bg-canvas border border-line rounded-xl p-3">
+                        <p className="text-[11px] text-ink-faint">% medio</p>
+                        <p className="text-xl font-semibold tabular mt-1">{formatPercent(avgSlope)}</p>
+                    </div>
+                    <div className="bg-canvas border border-line rounded-xl p-3">
+                        <p className="text-[11px] text-ink-faint">Desnivel</p>
+                        <p className="text-xl font-semibold tabular mt-1">{formatSignedElevation(gained)}</p>
+                    </div>
+                    <div className="bg-canvas border border-line rounded-xl p-3">
+                        <p className="text-[11px] text-ink-faint">Longitud</p>
+                        <p className="text-xl font-semibold tabular mt-1">{formatDistance(length)}</p>
+                    </div>
                 </div>
-                <div className="bg-canvas border border-line rounded-xl p-3">
-                    <p className="text-[11px] text-ink-faint">Desnivel</p>
-                    <p className="text-xl font-semibold tabular mt-1">{formatSignedElevation(gained)}</p>
+
+                <div className="mt-3">
+                    <ProfileChart profile={profile} height={72} currentDistance={metrics.distanceDone ?? null} />
                 </div>
-                <div className="bg-canvas border border-line rounded-xl p-3">
-                    <p className="text-[11px] text-ink-faint">Longitud</p>
-                    <p className="text-xl font-semibold tabular mt-1">{formatDistance(length)}</p>
-                </div>
-            </div>
+            </section>
+        );
 
-            <div className="mt-3">
-                <ProfileChart profile={profile} height={72} currentDistance={metrics.distanceDone ?? null} />
-            </div>
-        </section>
-    );
+        windows.push({ id: 'slope', title: 'Subida/Bajada', content });
+    }
 
-    windows.push({ id: 'slope', title: 'Subida/Bajada', content });
-}
-
-return windows;
+    return windows;
 }
 
 function EmptyNavigationState({ hydrated, onNavigate }: { hydrated: boolean; onNavigate: (s: Screen) => void }) {
