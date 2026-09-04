@@ -12,7 +12,7 @@
 
 </div>
 
-<!-- Last updated: 2026-09-03 -->
+<!-- Last updated: 2026-09-04 -->
 
 ---
 
@@ -24,6 +24,7 @@
 - 🗺️ **GPS Route Tracking** - Real-time position tracking on detailed maps
 - 📊 **Route Analysis** - Detailed elevation, distance, and time statistics
 - 🏔️ **Elevation Profiles** - Visualize gains and terrain difficulty
+   - Nuevo: relleno coloreado por pendiente por tramo, marcadores de POI en el perfil y toggles para mostrar/ocultar elementos
 - 📱 **Mobile First** - Optimized for Android, iOS, and tablets
 - 🔄 **GPX Import** - Import custom routes in GPX format
 - 💾 **Offline Maps** - Download map tiles for offline use

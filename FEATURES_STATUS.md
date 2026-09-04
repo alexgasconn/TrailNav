@@ -1,6 +1,6 @@
 # TrailNav - Estado de features
 
-Ultima revision: 2026-09-03
+Ultima revision: 2026-09-04
 
 Este archivo es la fuente de verdad del progreso. Una feature solo pasa a **Completada** cuando existe una implementacion funcional y una comprobacion verificable.
 
@@ -14,12 +14,12 @@ Estados: **Completada**, **En progreso**, **Pendiente**.
 | Importacion | FIT | Pendiente | Requiere parser binario |
 | Importacion | KML | Pendiente | Dependencia disponible, falta pipeline |
 | Analisis | Distancia y desnivel bruto | Completada | Calculado al importar |
-| Analisis | Perfil altimetrico | Completada | Canvas en detalle de ruta |
+| Analisis | Perfil altimetrico | Completada | Canvas en detalle de ruta; ahora con relleno por pendiente por tramo y opciones de visualización |
 | Analisis | Suavizado de elevacion | Completada | Media movil local para el analisis |
 | Analisis | Segmentos de subida y bajada | Completada | Umbral configurable en motor local |
 | Analisis | Ficha de segmentos significativos | Completada | Visible en Route Details |
-| Analisis | Pendiente por segmento coloreada | Completada | Tramos significativos coloreados en Map Explorer |
-| Analisis | Perfil interactivo sincronizado | Pendiente | Falta seleccion mapa/perfil |
+| Analisis | Pendiente por segmento coloreada | Completada | Tramos significativos coloreados en Map Explorer y perfil (fill por tramo) |
+| Analisis | Perfil interactivo sincronizado | En progreso | Vista en modo navegación muestra solo la gráfica con la posición del usuario; falta integración completa mapa↔perfil |
 | Terreno | Superficie OSM | Pendiente | Falta enriquecimiento previo |
 | Terreno | `sac_scale` y `mtb:scale` | Pendiente | Falta modelo de dificultad |
 

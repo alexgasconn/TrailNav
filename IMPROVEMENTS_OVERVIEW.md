@@ -295,6 +295,7 @@ Post-Deployment:
   • 5 major files refactored
   • 2 comprehensive guides written
   • 50+ new features added
+  • Perfil: relleno coloreado por pendiente por tramo, marcadores POI en el perfil y toggles; modo navegación muestra solo la gráfica con la posición del usuario
   • WCAG 2.1 AA compliance
   • 100% offline capability
   • 60-day intelligent caching
@@ -317,6 +318,6 @@ Post-Deployment:
 
 ---
 
-Generated: 2026-09-03  
+Generated: 2026-09-04  
 Version: 2.0.0  
 Status: ✅ Complete
