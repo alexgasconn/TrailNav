@@ -41,7 +41,7 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-    font-size: clamp(15px, 2vw, 17px);
+    font-size: 16px;
     overscroll-behavior: contain;
     color-scheme: light;
   }
@@ -59,6 +59,7 @@
   }
 
   #root {
+    height: 100dvh;
     min-height: 100dvh;
     width: 100%;
   }
@@ -70,7 +71,6 @@
     color: inherit;
     font: inherit;
     cursor: pointer;
-    outline: none;
   }
 
   input,
@@ -81,7 +81,12 @@
   h1,
   h2,
   h3 {
-    letter-spacing: -0.015em;
+    letter-spacing: 0;
+  }
+
+  button:focus-visible {
+    outline: 3px solid var(--color-moss);
+    outline-offset: 3px;
   }
 }
 
@@ -91,7 +96,7 @@
   }
 
   .pt-safe {
-    padding-top: env(safe-area-inset-top);
+    padding-top: max(12px, env(safe-area-inset-top));
   }
 
   .touch-target {
@@ -119,6 +124,14 @@
   button:active {
     opacity: 0.85;
   }
+}
+
+.map-place-label {
+  color: #243f36;
+  font: 600 12px "Segoe UI", sans-serif;
+  text-shadow: 0 1px 2px white, 1px 0 2px white, -1px 0 2px white;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 /* Controles de MapLibre adaptados al tema claro. */

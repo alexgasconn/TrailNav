@@ -6,39 +6,25 @@
     "scope": "/",
     "display": "standalone",
     "orientation": "portrait-primary",
-    "theme_color": "#10b981",
-    "background_color": "#09090b",
+    "theme_color": "#3f6b52",
+    "background_color": "#f6f5f1",
     "prefer_related_applications": false,
     "categories": [
         "navigation",
         "sports"
     ],
-    "screenshots": [
-        {
-            "src": "/icon.svg",
-            "type": "image/svg+xml",
-            "sizes": "192x192",
-            "form_factor": "narrow"
-        },
-        {
-            "src": "/icon.svg",
-            "type": "image/svg+xml",
-            "sizes": "512x512",
-            "form_factor": "wide"
-        }
-    ],
     "icons": [
         {
-            "src": "/icon.svg",
-            "type": "image/svg+xml",
-            "sizes": "any",
+            "src": "/icon-192.png",
+            "type": "image/png",
+            "sizes": "192x192",
             "purpose": "any"
         },
         {
-            "src": "/icon.svg",
-            "type": "image/svg+xml",
-            "sizes": "any",
-            "purpose": "maskable"
+            "src": "/icon-512.png",
+            "type": "image/png",
+            "sizes": "512x512",
+            "purpose": "any maskable"
         }
     ],
     "shortcuts": [

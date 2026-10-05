@@ -13,7 +13,7 @@ import { registerTileProtocol } from './lib/offlineTiles';
 import { formatClock, formatPercent } from './lib/format';
 import { NavigationSessionProvider, useNavigationSession } from './state/navigationSession';
 
-export type Screen = 'home' | 'import' | 'analysis' | 'map' | 'navigation' | 'offline' | 'settings';
+export type Screen = 'home' | 'import' | 'analysis' | 'map' | 'free' | 'navigation' | 'offline' | 'settings';
 
 export default function App() {
   return (
@@ -33,19 +33,21 @@ function Shell() {
 
   useEffect(() => {
     registerTileProtocol();
+    window.history.replaceState({ trailnav: 'home' }, '', window.location.href);
     getSettings().then((settings) => session.applySettings(settings));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const goTo = useCallback((screen: Screen) => {
-    setCurrentScreen((current) => {
-      if (current !== screen) historyRef.current.push(current);
-      return screen;
-    });
-  }, []);
+    if (currentScreen === screen) return;
+    historyRef.current.push(currentScreen);
+    window.history.pushState({ trailnav: screen }, '', window.location.href);
+    setCurrentScreen(screen);
+  }, [currentScreen]);
 
   const navigate = useCallback(
     (screen: Screen, route?: Route) => {
+      if (screen === 'free') setSelectedRoute(null);
       if (route) setSelectedRoute(route);
 
       if (screen === 'navigation') {
@@ -89,7 +91,7 @@ function Shell() {
     goTo('navigation');
   };
 
-  const isFullScreenMap = currentScreen === 'map' || currentScreen === 'navigation';
+  const isFullScreenMap = currentScreen === 'map' || currentScreen === 'free' || currentScreen === 'navigation';
   const showTabBar = currentScreen !== 'navigation';
   const showSessionBar = session.status !== 'idle' && currentScreen !== 'navigation';
 
@@ -100,6 +102,7 @@ function Shell() {
         {currentScreen === 'import' && <RouteImportScreen onNavigate={navigate} />}
         {currentScreen === 'analysis' && selectedRoute && <RouteAnalysisScreen route={selectedRoute} onNavigate={navigate} />}
         {currentScreen === 'map' && <MapExplorerScreen route={selectedRoute} onNavigate={navigate} />}
+        {currentScreen === 'free' && <MapExplorerScreen route={null} onNavigate={navigate} />}
         {currentScreen === 'navigation' && <NavigationScreen onNavigate={navigate} />}
         {currentScreen === 'offline' && <OfflineMapManagerScreen route={selectedRoute} />}
         {currentScreen === 'settings' && <SettingsScreen onNavigate={navigate} />}
@@ -137,11 +140,10 @@ function Shell() {
               label="Rutas"
               active={currentScreen === 'home' || currentScreen === 'analysis' || currentScreen === 'import'}
               onClick={() => {
-                historyRef.current = [];
-                setCurrentScreen('home');
+                goTo('home');
               }}
             />
-            <TabItem icon={<MapIcon size={22} />} label="Mapa" active={currentScreen === 'map'} onClick={() => goTo('map')} />
+            <TabItem icon={<MapIcon size={22} />} label="Mapa" active={currentScreen === 'map' || currentScreen === 'free'} onClick={() => navigate('free')} />
             <TabItem icon={<HardDrive size={22} />} label="Offline" active={currentScreen === 'offline'} onClick={() => goTo('offline')} />
             <TabItem
               icon={<SettingsIcon size={22} />}

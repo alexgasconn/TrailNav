@@ -14,6 +14,16 @@
 
 <!-- Last updated: 2026-09-04 -->
 
+## Catalunya Incluida Y Navegacion Libre
+
+- La pantalla Mapa y el acceso "Salir sin ruta" permiten seguimiento GPS sin GPX: velocidad, altitud, precision, zoom y orientacion por rumbo de movimiento.
+- Arrastrar el mapa pausa el seguimiento de camara; el boton de centrado lo recupera. La pantalla se mantiene encendida cuando el dispositivo, el permiso y el ajuste lo permiten.
+- `public/maps/catalunya.json` contiene cartografia real Natural Earth de dominio publico (<https://www.naturalearthdata.com/about/terms-of-use/>). Se incluye automaticamente en la cache de instalacion de la PWA, sin descargas regionales manuales.
+- Es un mapa de referencia a escala 1:10M: provincias, cinco poblaciones, rios y carreteras principales. NO contiene senderos, calles locales, relieve ni curvas de nivel, y no sustituye cartografia detallada para seguridad en montana. Fuera de la region no hay cobertura base incluida.
+- Los mapas raster detallados siguen siendo opcionales. Solo las regiones guardadas tienen detalle offline; el GPS no necesita internet, pero la primera apertura e instalacion de la app si. El navegador puede eliminar el almacenamiento si se borran sus datos.
+- Para regenerar los datos incluidos: `node scripts/build-catalunya.mjs`. No se descargan teselas masivamente para construir esta base.
+- Para probar la instalacion y el arranque offline: `npm run build` y `npm run preview`. El service worker esta desactivado en desarrollo para evitar versiones antiguas durante las pruebas.
+
 ---
 
 ## 🎯 Features
@@ -24,7 +34,7 @@
 - 🗺️ **GPS Route Tracking** - Real-time position tracking on detailed maps
 - 📊 **Route Analysis** - Detailed elevation, distance, and time statistics
 - 🏔️ **Elevation Profiles** - Visualize gains and terrain difficulty
-   - Nuevo: relleno coloreado por pendiente por tramo, marcadores de POI en el perfil y toggles para mostrar/ocultar elementos
+  - Nuevo: relleno coloreado por pendiente por tramo, marcadores de POI en el perfil y toggles para mostrar/ocultar elementos
 - 📱 **Mobile First** - Optimized for Android, iOS, and tablets
 - 🔄 **GPX Import** - Import custom routes in GPX format
 - 💾 **Offline Maps** - Download map tiles for offline use

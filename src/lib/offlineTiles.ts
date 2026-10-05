@@ -57,17 +57,6 @@ export function tileMaxZoom(style: MapStyleId) {
 }
 
 export function tileTemplate(style: MapStyleId) {
-    // Prefer direct network tile URLs when online to avoid relying on the
-    // custom protocol handler (which may be blocked by dev service workers).
-    try {
-        if (typeof window !== 'undefined' && navigator.onLine) {
-            // Call the url factory with template placeholders — it will interpolate
-            // the placeholders into a proper template string.
-            return TILE_SOURCES[style].url('{z}', '{x}', '{y}');
-        }
-    } catch (e) {
-        // fallthrough to protocol URL
-    }
     return `${TILE_PROTOCOL}://tile/${style}/{z}/{x}/{y}`;
 }
 
@@ -91,8 +80,8 @@ export function registerTileProtocol() {
     protocolRegistered = true;
 
     maplibregl.addProtocol(TILE_PROTOCOL, async (params, abortController) => {
-        const match = /^trailnav:\/\/tile\/(topo|satellite)\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
-        if (!match) throw new Error(`URL de tesela no válida: ${params.url}`);
+        const match = /^trailnav:\/\/tile\/([a-z_]+)\/(\d+)\/(\d+)\/(\d+)$/.exec(params.url);
+        if (!match || !Object.hasOwn(TILE_SOURCES, match[1])) throw new Error(`URL de tesela no válida: ${params.url}`);
 
         const style = match[1] as MapStyleId;
         const z = Number(match[2]);
@@ -103,10 +92,15 @@ export function registerTileProtocol() {
         if (stored) {
             try {
                 const ab = await (stored.blob as Blob).arrayBuffer();
-                return { arrayBuffer: ab } as any;
+                return { data: ab };
             } catch (e) {
                 console.warn('Tesela almacenada inválida, continuará con red:', style, z, x, y, e);
             }
+        }
+
+        if (!navigator.onLine && 'caches' in globalThis) {
+            const cached = await caches.match(TILE_SOURCES[style].url(z, x, y));
+            if (cached?.ok) return { data: await cached.arrayBuffer() };
         }
 
         if (!navigator.onLine) throw new Error('Tesela no disponible sin conexión');
@@ -114,7 +108,7 @@ export function registerTileProtocol() {
         const response = await fetch(TILE_SOURCES[style].url(z, x, y), { signal: abortController?.signal });
         if (!response.ok) throw new Error(`Error ${response.status} al descargar la tesela`);
         const ab = await response.arrayBuffer();
-        return { arrayBuffer: ab } as any;
+        return { data: ab };
     });
 }
 

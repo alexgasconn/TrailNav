@@ -15,11 +15,16 @@ export const MAP_STYLE_LABELS: Record<MapStyleId, string> = {
     esri: 'Esri (satélite)',
 };
 
-export function buildMapStyle(style: MapStyleId): StyleSpecification {
+export function buildMapStyle(style: MapStyleId, referenceOnly = false): StyleSpecification {
     registerTileProtocol();
     return {
         version: 8,
         sources: {
+            catalunya: {
+                type: 'geojson',
+                data: `${import.meta.env.BASE_URL}maps/catalunya.json`,
+                attribution: 'Natural Earth · dominio público · mapa de referencia 1:10M',
+            },
             base: {
                 type: 'raster',
                 tiles: [tileTemplate(style)],
@@ -29,10 +34,36 @@ export function buildMapStyle(style: MapStyleId): StyleSpecification {
             },
         },
         layers: [
+            { id: 'sea', type: 'background', paint: { 'background-color': '#d5edf2' } },
+            {
+                id: 'land', type: 'fill', source: 'catalunya', filter: ['==', ['get', 'kind'], 'land'],
+                paint: { 'fill-color': ['case', ['get', 'catalunya'], '#ecf2e4', '#f1f1eb'] },
+            },
+            {
+                id: 'province', type: 'line', source: 'catalunya', filter: ['==', ['get', 'kind'], 'land'],
+                paint: { 'line-color': '#a3b4a0', 'line-width': 1 },
+            },
+            {
+                id: 'rivers', type: 'line', source: 'catalunya', filter: ['==', ['get', 'kind'], 'river'],
+                paint: { 'line-color': '#60a5be', 'line-width': 1.5 },
+            },
+            {
+                id: 'roads-casing', type: 'line', source: 'catalunya', filter: ['==', ['get', 'kind'], 'road'],
+                paint: { 'line-color': '#c7b997', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 12, 5] },
+            },
+            {
+                id: 'roads', type: 'line', source: 'catalunya', filter: ['==', ['get', 'kind'], 'road'],
+                paint: { 'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 12, 3] },
+            },
+            {
+                id: 'places', type: 'circle', source: 'catalunya', filter: ['==', ['get', 'kind'], 'place'],
+                paint: { 'circle-radius': 4, 'circle-color': '#365e50', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 },
+            },
             {
                 id: 'base',
                 type: 'raster',
                 source: 'base',
+                layout: { visibility: referenceOnly ? 'none' : 'visible' },
                 paint: { 'raster-opacity': 1, 'raster-saturation': style === 'topo' ? -0.15 : 0 },
             },
         ],
@@ -141,7 +172,7 @@ export function createRoutePointMarker(point: RoutePoint): HTMLElement {
  */
 export function createUserMarkerElement(): HTMLElement {
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'width:64px;height:64px;position:relative;will-change:transform;';
+    wrapper.style.cssText = 'width:64px;height:64px;position:absolute;will-change:transform;pointer-events:none;';
     wrapper.innerHTML = `
         <div data-role="accuracy" style="position:absolute;left:22px;top:22px;width:20px;height:20px;border-radius:50%;background:rgba(15,118,110,0.12);border:1px solid rgba(15,118,110,0.35);display:none;"></div>
         <div data-role="cone" style="position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:0 0;transition:transform 180ms linear;">

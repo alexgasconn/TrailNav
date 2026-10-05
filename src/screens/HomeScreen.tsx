@@ -86,6 +86,19 @@ export function HomeScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) 
                 />
             </div>
 
+            <section className="mt-5 border-y border-line py-4">
+                <div className="flex items-center gap-3 mb-3">
+                    <Compass size={26} className="text-moss shrink-0" />
+                    <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-ink">A tu aire</h2>
+                        <p className="text-xs text-ink-soft">Catalunya · mapa base incluido</p>
+                    </div>
+                </div>
+                <button onClick={() => onNavigate('free')} className="w-full h-14 rounded-lg bg-moss text-white flex items-center justify-center gap-2 font-semibold">
+                    <Navigation2 size={21} /> Salir sin ruta
+                </button>
+            </section>
+
             {session.status !== 'idle' && session.route && (
                 <button
                     onClick={() => onNavigate('navigation', session.route!)}

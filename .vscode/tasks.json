@@ -1,0 +1,29 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "TrailNav: build PWA",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\nodejs\\npm.cmd' run build",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "TrailNav: build PWA",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\nodejs\\npm.cmd' run build",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "TrailNav: build PWA",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\nodejs\\npm.cmd' run build",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

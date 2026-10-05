@@ -85,8 +85,8 @@ export function OfflineMapManagerScreen({ route }: { route: Route | null }) {
         const map = new maplibregl.Map({
             container: containerRef.current,
             style: buildMapStyle(mapStyle),
-            center: [-3.7, 40.4],
-            zoom: 6,
+            center: [1.65, 41.75],
+            zoom: 7.5,
             attributionControl: { compact: true },
             trackResize: true,
         });
@@ -193,14 +193,20 @@ export function OfflineMapManagerScreen({ route }: { route: Route | null }) {
             <header className="pt-safe px-4 pt-6 pb-3">
                 <h1 className="text-2xl font-semibold text-ink">Mapas offline</h1>
                 <p className="text-sm text-ink-soft mt-1">
-                    Las teselas se guardan en el dispositivo y se usan automáticamente cuando no hay cobertura.
+                    Catalunya · cartografía de referencia incluida
                 </p>
             </header>
 
+            <section className="mx-4 mb-4 border-y border-line py-3">
+                <p className="text-sm font-semibold text-moss">Catalunya base · incluida en la app</p>
+                <p className="text-xs text-ink-soft mt-1">Provincias, poblaciones, ríos y carreteras principales. Escala 1:10M, sin detalle de senderos.</p>
+            </section>
+
             <section className="px-4">
+                <h2 className="text-sm font-semibold mb-3">Detalle adicional · opcional</h2>
                 <div className="rounded-2xl overflow-hidden border border-line bg-surface">
                     <div className="relative h-64">
-                        <div ref={containerRef} className="absolute inset-0" />
+                        <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
                         <div className="absolute inset-[8%] border-2 border-moss rounded-lg pointer-events-none shadow-[0_0_0_9999px_rgba(31,29,26,0.18)]" />
                     </div>
 

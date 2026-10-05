@@ -12,10 +12,10 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest', 'maps/catalunya.json'],
         manifest: false, // Use public/manifest.webmanifest instead
         devOptions: {
-          enabled: true,
+          enabled: false,
           navigateFallback: 'index.html'
         },
         workbox: {
@@ -92,7 +92,7 @@ export default defineConfig(({ mode }) => {
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       headers: {
-        'Cache-Control': 'public, max-age=31536000',
+        'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'SAMEORIGIN'
       }
