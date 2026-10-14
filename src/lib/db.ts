@@ -47,6 +47,10 @@ export interface StoredTile {
   size: number;
 }
 
+export type FitnessLevel = 'sedentary' | 'beginner' | 'average' | 'athletic' | 'endurance' | 'elite' | 'superhuman';
+export type PaceType = 'photography' | 'relaxed' | 'steady' | 'nordic' | 'power' | 'fast' | 'trail_run' | 'sky_run';
+export type PackWeight = 'light' | 'medium' | 'heavy';
+
 export interface Settings {
   id: string;
   deviationWarningDistance: number;
@@ -54,6 +58,11 @@ export interface Settings {
   mapStyle: MapStyleId;
   screenAlwaysOn: boolean;
   vibrationAlerts: boolean;
+  /** Perfil para estimar tiempos de ruta. */
+  fitness: FitnessLevel;
+  pace: PaceType;
+  packWeight: PackWeight;
+  includeBreaks: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -63,6 +72,10 @@ export const DEFAULT_SETTINGS: Settings = {
   mapStyle: 'topo',
   screenAlwaysOn: true,
   vibrationAlerts: true,
+  fitness: 'average',
+  pace: 'steady',
+  packWeight: 'light',
+  includeBreaks: true,
 };
 
 interface TrailNavDB extends DBSchema {

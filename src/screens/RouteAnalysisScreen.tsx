@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowLeftRight, Car, Map as MapIcon, Navigation2, TrendingDown, TrendingUp } from 'lucide-react';
-import { Route, saveRoute } from '../lib/db';
+import { Route, getSettings, saveRoute } from '../lib/db';
 import { reverseRoute } from '../lib/reverseRoute';
 import { Screen } from '../App';
 import { TerrainSegment, analyzeRoute } from '../lib/routeAnalysis';
 import { getRouteProfile } from '../lib/routeProfile';
 import { getRoutePoints } from '../lib/routePoints';
-import { estimateRouteTime } from '../lib/eta';
+import { DEFAULT_HIKER, FITNESS_LABELS, HikerProfile, PACE_LABELS, estimateRouteTime } from '../lib/eta';
 import { RouteWeatherPanel } from '../components/RouteWeatherPanel';
 import ProfileChart from '../components/ProfileChart';
 import { formatDistance, formatDuration, formatElevation, formatSlope } from '../lib/format';
@@ -17,10 +17,11 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
     const profile = useMemo(() => getRouteProfile(route), [route]);
     const analysis = useMemo(() => analyzeRoute(route), [route]);
     const points = useMemo(() => getRoutePoints(route), [route]);
-    const eta = useMemo(
-        () => estimateRouteTime(profile.totalDistance || route.distance, analysis),
-        [profile, analysis, route.distance]
-    );
+    const [hiker, setHiker] = useState<HikerProfile>(DEFAULT_HIKER);
+    useEffect(() => {
+        getSettings().then((s) => setHiker({ fitness: s.fitness, pace: s.pace, packWeight: s.packWeight, includeBreaks: s.includeBreaks }));
+    }, []);
+    const eta = useMemo(() => estimateRouteTime(profile, hiker), [profile, hiker]);
 
     // Profile chart is rendered by ProfileChart component below
 
@@ -86,6 +87,26 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
                     <StatCard label="Desnivel negativo" value={formatElevation(profile.totalDescent)} />
                     <StatCard label="Altitud máxima" value={profile.hasElevation ? formatElevation(profile.maxElevation) : 'Sin datos'} />
                     <StatCard label="Altitud mínima" value={profile.hasElevation ? formatElevation(profile.minElevation) : 'Sin datos'} />
+                </section>
+
+                <section className="bg-surface border border-line rounded-2xl p-4">
+                    <div className="flex items-baseline justify-between mb-3 gap-3">
+                        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Tiempo por método</h2>
+                        <span className="text-xs text-ink-faint">
+                            {FITNESS_LABELS[hiker.fitness]} · {PACE_LABELS[hiker.pace]}{hiker.includeBreaks ? ' · con descansos' : ''}
+                        </span>
+                    </div>
+                    <ul className="divide-y divide-line">
+                        {eta.estimates.map((estimate) => (
+                            <li key={estimate.name} className="flex justify-between py-2 text-sm">
+                                <span className="text-ink-soft">{estimate.name}</span>
+                                <span className="text-ink font-medium tabular">{formatDuration(estimate.minutes)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                    <p className="text-[11px] text-ink-faint mt-2">
+                        Estimación: {eta.aggregate === 'median' ? 'mediana (los m\u00e9todos difieren)' : 'media (los m\u00e9todos coinciden)'}. Ajusta tu perfil en Ajustes.
+                    </p>
                 </section>
 
                 <section className="bg-surface border border-line rounded-2xl p-4">

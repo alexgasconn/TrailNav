@@ -15,7 +15,6 @@ import {
     updateUserMarkerElement,
 } from '../lib/mapStyles';
 import { RouteWeatherSample, describeWeather, getRouteWeather, getStoredStart } from '../lib/routeWeather';
-import { analyzeRoute } from '../lib/routeAnalysis';
 import { estimateRouteTime } from '../lib/eta';
 import { formatTimeOfDay } from '../lib/format';
 import { getRouteProfile } from '../lib/routeProfile';
@@ -264,16 +263,18 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
         }
         let cancelled = false;
         setWeatherStatus('Cargando tiempo…');
-        const eta = estimateRouteTime(profile.totalDistance || route.distance, analyzeRoute(route)).minutes;
-        getRouteWeather(route, eta, getStoredStart(route.id))
-            .then((timeline) => {
-                if (cancelled) return;
-                setWeatherSamples(timeline.samples);
-                setWeatherStatus(null);
-            })
-            .catch(() => {
-                if (!cancelled) setWeatherStatus('No se pudo obtener el tiempo. Comprueba la conexión.');
-            });
+        getSettings().then((s) => {
+            if (cancelled) return;
+            const eta = estimateRouteTime(profile, { fitness: s.fitness, pace: s.pace, packWeight: s.packWeight, includeBreaks: s.includeBreaks }).minutes;
+            return getRouteWeather(route, eta, getStoredStart(route.id))
+                .then((timeline) => {
+                    if (cancelled) return;
+                    setWeatherSamples(timeline.samples);
+                    setWeatherStatus(null);
+                });
+        }).catch(() => {
+            if (!cancelled) setWeatherStatus('No se pudo obtener el tiempo. Comprueba la conexión.');
+        });
         return () => {
             cancelled = true;
         };

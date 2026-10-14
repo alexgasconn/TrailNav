@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Compass, HardDrive, Info, Loader2, MapPin, Smartphone } from 'lucide-react';
-import { MapStyleId, Settings, getSettings, saveSettings } from '../lib/db';
+import { Compass, Gauge, HardDrive, Info, Loader2, MapPin, Smartphone } from 'lucide-react';
+import { FitnessLevel, MapStyleId, PackWeight, PaceType, Settings, getSettings, saveSettings } from '../lib/db';
+import { FITNESS_LABELS, PACE_LABELS, PACK_LABELS } from '../lib/eta';
 import { Screen } from '../App';
 import { MAP_STYLE_LABELS } from '../lib/mapStyles';
 import { getStorageUsage } from '../lib/offlineTiles';
@@ -87,6 +88,39 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (s: Screen) => void
                     />
                 </Group>
 
+                <Group icon={<Gauge size={18} />} title="Tu perfil de marcha">
+                    <Row label="Forma física" description="Velocidad base para estimar el tiempo de ruta">
+                        <Choices
+                            options={Object.keys(FITNESS_LABELS) as FitnessLevel[]}
+                            labels={FITNESS_LABELS}
+                            value={settings.fitness}
+                            onChange={(fitness) => update({ fitness })}
+                        />
+                    </Row>
+                    <Row label="Ritmo" description="Estilo de marcha">
+                        <Choices
+                            options={Object.keys(PACE_LABELS) as PaceType[]}
+                            labels={PACE_LABELS}
+                            value={settings.pace}
+                            onChange={(pace) => update({ pace })}
+                        />
+                    </Row>
+                    <Row label="Mochila" description="Una carga mayor reduce la velocidad">
+                        <Choices
+                            options={Object.keys(PACK_LABELS) as PackWeight[]}
+                            labels={PACK_LABELS}
+                            value={settings.packWeight}
+                            onChange={(packWeight) => update({ packWeight })}
+                        />
+                    </Row>
+                    <Toggle
+                        label="Incluir descansos"
+                        description="10 min por hora completa (no al correr)"
+                        checked={settings.includeBreaks}
+                        onChange={(value) => update({ includeBreaks: value })}
+                    />
+                </Group>
+
                 <Group icon={<Smartphone size={18} />} title="Dispositivo">
                     <Toggle
                         label="Pantalla siempre encendida"
@@ -115,6 +149,32 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (s: Screen) => void
                     </p>
                 </div>
             </div>
+        </div>
+    );
+}
+
+function Choices<T extends string>({
+    options,
+    labels,
+    value,
+    onChange,
+}: {
+    options: T[];
+    labels: Record<T, string>;
+    value: T;
+    onChange: (value: T) => void;
+}) {
+    return (
+        <div className="flex flex-wrap gap-1.5">
+            {options.map((option) => (
+                <button
+                    key={option}
+                    onClick={() => onChange(option)}
+                    className={`h-10 px-3 rounded-lg border text-sm font-medium ${value === option ? 'border-moss bg-moss-soft text-moss-strong' : 'border-line text-ink-soft'}`}
+                >
+                    {labels[option]}
+                </button>
+            ))}
         </div>
     );
 }

@@ -41,6 +41,7 @@
 - 🚗 **Cómo llegar al inicio** - Abre Google Maps con la ruta en coche hasta el punto de salida
 - 🧭 **Recorrido real** - Durante la navegación se dibuja en azul el camino realmente hecho; los km y D+/D− mostrados son los reales (GPS), no los de la traza GPX
 - 🗺️ **Mapa por defecto** - Topográfico OpenTopoMap (basado en OpenStreetMap)
+- ⏱️ **Tiempo estimado** - Mismos métodos que TrekkingPro: Naismith, Tobler (integrado punto a punto), Munter, Suizo DIN 33466 y Petzoldt. Se combinan con la media, o con la mediana si difieren más de un 10 %. Depende de tu perfil en Ajustes: forma física, ritmo, peso de la mochila y descansos (10 min/h)
 - 🌦️ **Meteorología en ruta** - En el análisis eliges día y hora de salida (próximos 7 días) y ves el tiempo en 5 puntos de la ruta durante las horas que se estima que durará. Datos de Open-Meteo. En el mapa, el botón de nube muestra esos 5 puntos con icono, temperatura, hora y probabilidad de lluvia
 - 📱 **Mobile First** - Optimized for Android, iOS, and tablets
 - 🔄 **GPX Import** - Import custom routes in GPX format
