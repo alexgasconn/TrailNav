@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => {
             },
             // API calls - Network first
             {
-              urlPattern: /^https:\/\/api\..*/i,
+              urlPattern: /^https:\/\/api\.(?!open-meteo)[^/]+\/.*/i,
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'api-cache',

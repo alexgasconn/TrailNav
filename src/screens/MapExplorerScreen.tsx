@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
-import { Compass, Crosshair, Layers, Minus, Navigation2, Plus, Satellite, WifiOff, X } from 'lucide-react';
+import { Compass, CloudSun, Crosshair, Layers, Minus, Navigation2, Plus, Satellite, WifiOff, X } from 'lucide-react';
 import { MAP_STYLE_IDS, MapStyleId, Route, getSettings, saveSettings } from '../lib/db';
 import { Screen } from '../App';
 import {
@@ -11,8 +11,13 @@ import {
     buildMapStyle,
     createRoutePointMarker,
     createUserMarkerElement,
+    createWeatherMarker,
     updateUserMarkerElement,
 } from '../lib/mapStyles';
+import { RouteWeatherSample, describeWeather, getRouteWeather, getStoredStart } from '../lib/routeWeather';
+import { analyzeRoute } from '../lib/routeAnalysis';
+import { estimateRouteTime } from '../lib/eta';
+import { formatTimeOfDay } from '../lib/format';
 import { getRouteProfile } from '../lib/routeProfile';
 import { getRoutePoints } from '../lib/routePoints';
 import { formatDistance, formatElevation } from '../lib/format';
@@ -44,6 +49,26 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
     const [showStylePicker, setShowStylePicker] = useState(false);
     const [gpsError, setGpsError] = useState<string | null>(null);
     const [initAttempt, setInitAttempt] = useState(0);
+    const [showWeather, setShowWeather] = useState(false);
+    const [weatherSamples, setWeatherSamples] = useState<RouteWeatherSample[]>([]);
+    const [weatherStatus, setWeatherStatus] = useState<string | null>(null);
+    const weatherMarkersRef = useRef<maplibregl.Marker[]>([]);
+    const weatherSamplesRef = useRef<RouteWeatherSample[]>([]);
+    weatherSamplesRef.current = weatherSamples;
+
+    const drawWeather = (map: maplibregl.Map) => {
+        weatherMarkersRef.current.forEach((marker) => marker.remove());
+        weatherMarkersRef.current = weatherSamplesRef.current.map((sample) => {
+            const { icon } = describeWeather(sample.weatherCode);
+            return new maplibregl.Marker({
+                element: createWeatherMarker(icon, sample.temperature, formatTimeOfDay(sample.arrivalTime), sample.precipitationProbability),
+                anchor: 'bottom',
+                offset: [0, -10],
+            })
+                .setLngLat(sample.coordinate)
+                .addTo(map);
+        });
+    };
 
     const profile = useMemo(() => (route ? getRouteProfile(route) : null), [route]);
     const routePoints = useMemo(() => (route ? getRoutePoints(route) : []), [route]);
@@ -148,6 +173,7 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
 
         map.on('load', () => {
             applyOverlays();
+            drawWeather(map);
             if (route?.geoJson && !cameraRef.current) {
                 map.fitBounds(turf.bbox(route.geoJson) as [number, number, number, number], { padding: 60, duration: 0 });
             }
@@ -171,6 +197,8 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
         return () => {
             cameraRef.current = { center: map.getCenter().toArray() as [number, number], zoom: map.getZoom(), bearing: map.getBearing() };
             observer.disconnect();
+            weatherMarkersRef.current.forEach((marker) => marker.remove());
+            weatherMarkersRef.current = [];
             placeMarkersRef.current.forEach((marker) => marker.remove());
             placeMarkersRef.current = [];
             poiMarkersRef.current.forEach((marker) => marker.remove());
@@ -228,6 +256,40 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
         };
     }, []);
 
+    useEffect(() => {
+        if (!showWeather || !route || !profile) {
+            setWeatherSamples([]);
+            setWeatherStatus(null);
+            return;
+        }
+        let cancelled = false;
+        setWeatherStatus('Cargando tiempo…');
+        const eta = estimateRouteTime(profile.totalDistance || route.distance, analyzeRoute(route)).minutes;
+        getRouteWeather(route, eta, getStoredStart(route.id))
+            .then((timeline) => {
+                if (cancelled) return;
+                setWeatherSamples(timeline.samples);
+                setWeatherStatus(null);
+            })
+            .catch(() => {
+                if (!cancelled) setWeatherStatus('No se pudo obtener el tiempo. Comprueba la conexión.');
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [showWeather, route?.id]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) return;
+        if (!showWeather) {
+            weatherMarkersRef.current.forEach((marker) => marker.remove());
+            weatherMarkersRef.current = [];
+            return;
+        }
+        drawWeather(map);
+    }, [weatherSamples, showWeather]);
+
     const changeStyle = async (style: MapStyleId) => {
         setShowStylePicker(false);
         setReferenceOnly(false);
@@ -281,6 +343,17 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                     >
                         <Layers size={22} />
                     </button>
+                    {route && (
+                        <button
+                            onClick={() => setShowWeather((value) => !value)}
+                            className={`touch-target grid place-items-center border border-line rounded-xl shadow-sm ${showWeather ? 'bg-moss text-white' : 'bg-surface text-ink'}`}
+                            aria-label="Mostrar el tiempo en 5 puntos de la ruta"
+                            title="Tiempo en la ruta"
+                            aria-pressed={showWeather}
+                        >
+                            <CloudSun size={22} />
+                        </button>
+                    )}
                     <button onClick={toggleCourse} className="touch-target grid place-items-center bg-surface border border-line rounded-lg shadow-sm text-ink" aria-label={courseUp ? 'Orientar al norte' : 'Orientar según rumbo GPS'} title={courseUp ? 'Orientar al norte' : 'Orientar según rumbo GPS'} aria-pressed={courseUp}><Compass size={22} className={courseUp ? 'text-moss' : ''} /></button>
                     <div className="grid bg-surface border border-line rounded-lg shadow-sm">
                         <button onClick={() => mapRef.current?.zoomIn()} className="touch-target grid place-items-center text-ink" aria-label="Acercar mapa" title="Acercar mapa"><Plus size={22} /></button>
@@ -302,6 +375,10 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                     )}
                 </div>
             </div>
+
+            {weatherStatus && (
+                <div role="status" className="absolute left-3 right-16 top-40 bg-surface border border-line text-ink-soft px-3 py-2 rounded-lg text-xs z-10">{weatherStatus}</div>
+            )}
 
             {(gpsError || (referenceOnly && outsideCoverage)) && (
                 <div role="status" className="absolute left-3 right-16 top-28 bg-clay-soft border border-clay/30 text-clay px-3 py-2 rounded-lg text-xs z-10">

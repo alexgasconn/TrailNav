@@ -196,6 +196,16 @@ export function setRouteAlertState(map: maplibregl.Map, offRoute: boolean) {
     map.setPaintProperty('route-line', 'line-color', offRoute ? '#b91c1c' : '#c2410c');
 }
 
+/** Etiqueta compacta con el tiempo previsto en un punto de la ruta. */
+export function createWeatherMarker(icon: string, temperature: number, time: string, rain: number): HTMLElement {
+    const element = document.createElement('div');
+    element.style.cssText =
+        'background:#ffffff;border:1px solid #d6d3d1;border-radius:12px;padding:3px 7px;box-shadow:0 1px 5px rgba(28,25,23,0.3);' +
+        'font:600 12px system-ui,sans-serif;color:#1c1917;text-align:center;line-height:1.25;white-space:nowrap;';
+    element.innerHTML = `<div>${icon} ${temperature}°</div><div style="font-weight:400;font-size:10px;color:#57534e">${time} · 💧${rain}%</div>`;
+    return element;
+}
+
 const POINT_STYLES: Record<RoutePointKind, { background: string; glyph: string; size: number }> = {
     start: { background: '#0f766e', glyph: '▶', size: 26 },
     finish: { background: '#b45309', glyph: '■', size: 26 },

@@ -1,36 +1,51 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CloudRain, RefreshCw, Thermometer, Wind, WifiOff } from 'lucide-react';
 import { Route } from '../lib/db';
-import { getRouteWeather, RouteWeatherTimeline } from '../lib/weather';
-import { formatInteger, formatTimeOfDay } from '../lib/format';
+import {
+    RouteWeatherTimeline,
+    defaultStartTimestamp,
+    describeWeather,
+    getRouteWeather,
+    getStoredStart,
+    maxStartTimestamp,
+    weatherStartKey,
+} from '../lib/routeWeather';
+import { formatDate, formatDuration, formatInteger, formatTimeOfDay } from '../lib/format';
 
-const ERROR_MESSAGE = 'Sin previsión disponible. Conecta el dispositivo para descargarla.';
+const COLORS = ['#b91c1c', '#c2410c', '#a16207', '#15803d', '#1d4ed8'];
+
+function pad(value: number) {
+    return String(value).padStart(2, '0');
+}
+
+function toLocalInput(timestamp: number) {
+    const d = new Date(timestamp);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinutes: number }) {
+    const [start, setStart] = useState(() => getStoredStart(route.id));
     const [timeline, setTimeline] = useState<RouteWeatherTimeline | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    // use current time as start timestamp (no manual date/time selection)
+    const [reloadKey, setReloadKey] = useState(0);
+    const forceRef = useRef(false);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [visible, setVisible] = useState<Record<string, boolean>>({});
-    const [hours, setHours] = useState<number>(48);
 
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
         setError(null);
-        const startTimestamp = Date.now();
-        getRouteWeather(route, etaMinutes, startTimestamp)
+        const force = forceRef.current;
+        forceRef.current = false;
+        getRouteWeather(route, etaMinutes, start, force)
             .then((result) => {
-                if (!cancelled) {
-                    setTimeline(result);
-                    const vis: Record<string, boolean> = {};
-                    result.samples.forEach((s) => (vis[s.label] = true));
-                    setVisible(vis);
-                }
+                if (!cancelled) setTimeline(result);
             })
-            .catch(() => {
-                if (!cancelled) setError(ERROR_MESSAGE);
+            .catch((e: unknown) => {
+                if (cancelled) return;
+                const reason = e instanceof Error ? e.message : String(e);
+                setError(`No se pudo obtener la previsión (${reason}). Comprueba la conexión e inténtalo de nuevo.`);
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);
@@ -38,146 +53,134 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
         return () => {
             cancelled = true;
         };
-    }, [route.id, etaMinutes]);
+    }, [route.id, etaMinutes, start, reloadKey]);
+
+    const changeStart = (value: string) => {
+        const timestamp = new Date(value).getTime();
+        if (!Number.isFinite(timestamp)) return;
+        const clamped = Math.min(Math.max(timestamp, Date.now() - 3_600_000), maxStartTimestamp());
+        try {
+            localStorage.setItem(weatherStartKey(route.id), String(clamped));
+        } catch { /* no crítico */ }
+        setStart(clamped);
+    };
 
     const refresh = () => {
-        setLoading(true);
-        setError(null);
-        const startTimestamp = Date.now();
-        getRouteWeather(route, etaMinutes, startTimestamp, true)
-            .then((result) => {
-                setTimeline(result);
-                const vis: Record<string, boolean> = {};
-                result.samples.forEach((s) => (vis[s.label] = true));
-                setVisible(vis);
-            })
-            .catch(() => setError(ERROR_MESSAGE))
-            .finally(() => setLoading(false));
+        forceRef.current = true;
+        setReloadKey((value) => value + 1);
     };
 
-    const exportTimeline = () => {
-        if (!timeline) return;
-        const blob = new Blob([JSON.stringify(timeline, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `trailnav-weather-${route.id}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
-    // draw simple chart of temperature and precipitation using hourly arrays
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas || !timeline) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // gather hourly series from samples (overlay multiple samples if available)
-        const series = timeline.samples.map((s) => s.hourly).filter(Boolean) as NonNullable<typeof timeline.samples[0]['hourly']>[];
-        if (series.length === 0) return;
-
         const width = canvas.clientWidth;
-        const height = 140;
+        const height = 150;
         const ratio = window.devicePixelRatio || 1;
         canvas.width = Math.floor(width * ratio);
         canvas.height = Math.floor(height * ratio);
         ctx.scale(ratio, ratio);
         ctx.clearRect(0, 0, width, height);
 
-        // full time range across series
-        let t0 = Infinity;
-        let t1 = -Infinity;
-        series.forEach((s) => {
-            if (s.time.length > 0) {
-                t0 = Math.min(t0, s.time[0]);
-                t1 = Math.max(t1, s.time[s.time.length - 1]);
-            }
+        const t0 = timeline.startTimestamp;
+        const t1 = Math.max(timeline.endTimestamp, t0 + 3_600_000);
+        const all = timeline.samples.flatMap((s) => s.hourly.temperature);
+        const tmin = Math.floor(Math.min(...all));
+        const tmax = Math.ceil(Math.max(...all));
+        const left = 30;
+        const bottom = 20;
+        const top = 8;
+        const plotW = width - left - 8;
+        const plotH = height - bottom - top;
+        const toX = (t: number) => left + ((t - t0) / (t1 - t0)) * plotW;
+        const toY = (v: number) => top + (1 - (v - tmin) / Math.max(1, tmax - tmin)) * plotH;
+
+        // Probabilidad de lluvia máxima entre puntos, como barras de fondo.
+        const first = timeline.samples[0].hourly;
+        const barW = Math.max(3, plotW / Math.max(1, first.time.length) - 3);
+        first.time.forEach((t, i) => {
+            const p = Math.max(...timeline.samples.map((s) => s.hourly.precipitationProbability[i] ?? 0));
+            const h = (p / 100) * plotH;
+            ctx.fillStyle = 'rgba(59,130,246,0.22)';
+            ctx.fillRect(toX(t) - barW / 2, top + plotH - h, barW, h);
         });
 
-        const startTimestamp = Date.now();
-        const clipEnd = startTimestamp + hours * 3600000;
-        // clamp to requested hours window
-        t0 = Math.max(t0, startTimestamp);
-        t1 = Math.min(t1, clipEnd);
-        if (t0 >= t1) return;
-
-        // temperature range
-        let tmin = Infinity;
-        let tmax = -Infinity;
-        let pmax = 0;
-        series.forEach((s) => {
-            s.temperature.forEach((v) => { if (v < tmin) tmin = v; if (v > tmax) tmax = v; });
-            s.precipitationProbability.forEach((v) => { if (v > pmax) pmax = v; });
-        });
-        if (!isFinite(tmin)) { tmin = 0; tmax = 30; }
-
-        const padding = 28;
-
-        const toX = (t: number) => padding + ((t - t0) / (t1 - t0)) * (width - padding * 2);
-        const toYTemp = (temp: number) => padding + (1 - (temp - tmin) / Math.max(1, tmax - tmin)) * (height - padding * 2);
-        const precipBarHeight = 40;
-
-        // draw precipitation bars for visible series (overlay, light)
-        const colors = ['#ef4444', '#f59e0b', '#10b981'];
-        series.forEach((s, si) => {
-            const label = timeline.samples[si]?.label ?? String(si);
-            if (!visible[label]) return;
-            ctx.fillStyle = 'rgba(59,130,246,0.12)';
-            const filtered = s.time.map((t, i) => ({ t, p: s.precipitationProbability[i] })).filter(({ t }) => t >= t0 && t <= t1);
-            const barW = Math.max(2, (width - padding * 2) / Math.max(1, filtered.length) - 2);
-            filtered.forEach((pt) => {
-                const x = toX(pt.t);
-                const h = (pt.p / Math.max(1, pmax)) * precipBarHeight;
-                ctx.fillRect(x - barW / 2, height - padding - h, barW, h);
-            });
-        });
-
-        // draw temperature lines (one per series, first highlighted)
-        series.forEach((s, si) => {
-            const label = timeline.samples[si]?.label ?? String(si);
-            if (!visible[label]) return;
+        timeline.samples.forEach((sample, si) => {
             ctx.beginPath();
-            const filtered = s.time.map((t, i) => ({ t, temp: s.temperature[i] })).filter(({ t }) => t >= t0 && t <= t1);
-            filtered.forEach((pt, i) => {
-                const x = toX(pt.t);
-                const y = toYTemp(pt.temp);
+            sample.hourly.time.forEach((t, i) => {
+                const x = toX(t);
+                const y = toY(sample.hourly.temperature[i]);
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             });
-            ctx.strokeStyle = colors[si % colors.length];
-            ctx.lineWidth = si === 0 ? 2 : 1;
+            ctx.strokeStyle = COLORS[si % COLORS.length];
+            ctx.lineWidth = 2;
             ctx.stroke();
         });
 
-        // axes labels
-        ctx.fillStyle = 'rgba(17,24,39,0.8)';
-        ctx.font = '11px system-ui, -apple-system, Segoe UI, Roboto';
-        ctx.fillText(`${Math.round(tmin)}°C`, 6, toYTemp(tmin));
-        ctx.fillText(`${Math.round(tmax)}°C`, 6, toYTemp(tmax));
-        ctx.fillText(`Pluv. % (max ${Math.round(pmax)}%)`, width - 120, height - padding + 12);
+        ctx.fillStyle = 'rgba(87,83,78,0.9)';
+        ctx.font = '10px system-ui, -apple-system, Segoe UI, Roboto';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${tmax}°`, left - 4, toY(tmax));
+        ctx.fillText(`${tmin}°`, left - 4, toY(tmin));
+        ctx.textBaseline = 'top';
+        ctx.textAlign = 'left';
+        ctx.fillText(formatTimeOfDay(t0), left, height - bottom + 5);
+        ctx.textAlign = 'right';
+        ctx.fillText(formatTimeOfDay(t1), width - 8, height - bottom + 5);
     }, [timeline]);
+
+    const minInput = toLocalInput(defaultStartTimestamp() - 3_600_000);
+    const maxInput = toLocalInput(maxStartTimestamp());
+    const end = start + etaMinutes * 60_000;
 
     return (
         <section className="bg-surface border border-line rounded-2xl p-4">
             <div className="flex items-center justify-between gap-3 mb-3">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Meteorología en ruta</h2>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={refresh}
-                        disabled={loading}
-                        className="touch-target grid place-items-center text-ink-soft disabled:opacity-50"
-                        aria-label="Actualizar previsión"
-                    >
-                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                    </button>
-                </div>
+                <button
+                    onClick={refresh}
+                    disabled={loading}
+                    className="touch-target grid place-items-center text-ink-soft disabled:opacity-50"
+                    aria-label="Actualizar previsión"
+                >
+                    <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                </button>
             </div>
+
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+                <label className="text-xs text-ink-faint" htmlFor="weather-start">Salida</label>
+                <input
+                    id="weather-start"
+                    type="datetime-local"
+                    step={3600}
+                    min={minInput}
+                    max={maxInput}
+                    value={toLocalInput(start)}
+                    onChange={(e) => changeStart(e.target.value)}
+                    className="h-10 px-2 rounded-xl border border-line bg-surface text-sm"
+                />
+                <button
+                    onClick={() => {
+                        try { localStorage.removeItem(weatherStartKey(route.id)); } catch { /* no crítico */ }
+                        setStart(defaultStartTimestamp());
+                    }}
+                    className="h-10 px-3 rounded-xl border border-line text-sm text-ink"
+                >
+                    Ahora
+                </button>
+            </div>
+            <p className="text-xs text-ink-soft mb-3">
+                Próximas {formatDuration(etaMinutes)} (duración estimada): {formatDate(start)} {formatTimeOfDay(start)} → {formatTimeOfDay(end)}
+            </p>
 
             {loading && !timeline && <div className="h-24 rounded-xl bg-surface-soft animate-pulse" />}
 
-            {error && !timeline && (
-                <div className="flex gap-3 text-sm text-ink-soft">
+            {error && (
+                <div className="flex gap-3 text-sm text-ink-soft mb-3">
                     <WifiOff size={18} className="shrink-0 text-ink-faint" />
                     <p>{error}</p>
                 </div>
@@ -185,48 +188,42 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
 
             {timeline && (
                 <>
-                    <div className="mb-3">
-                        <canvas ref={canvasRef} className="w-full rounded-xl bg-canvas" style={{ height: 140 }} />
-                    </div>
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="flex gap-1">
-                            {timeline.samples.map((s) => (
-                                <button
-                                    key={s.label}
-                                    onClick={() => setVisible((v) => ({ ...v, [s.label]: !v[s.label] }))}
-                                    className={`px-2 py-1 rounded-md text-sm border ${visible[s.label] ? 'bg-moss text-white border-moss' : 'bg-surface border-line text-ink'}`}
-                                >
-                                    {s.label}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="ml-auto flex items-center gap-2">
-                            <label className="text-xs text-ink-faint">Horas</label>
-                            <input type="number" value={hours} onChange={(e) => setHours(Number(e.target.value) || 1)} className="w-20 h-8 px-2 rounded-xl border border-line bg-surface text-sm" />
-                            <button onClick={exportTimeline} className="h-8 px-3 rounded-xl bg-surface border border-line text-ink text-sm">Guardar</button>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                        {timeline.samples.map((sample) => (
-                            <article key={sample.label} className="bg-canvas border border-line rounded-xl p-3 min-w-0">
-                                <p className="text-[10px] uppercase tracking-wide text-ink-faint truncate">{sample.label}</p>
-                                <p className="text-xs text-ink-soft tabular mt-0.5">{formatTimeOfDay(sample.arrivalTime)}</p>
-                                <p className="flex items-center gap-1.5 mt-2 text-ink font-semibold tabular">
-                                    <Thermometer size={15} className="text-clay" />
-                                    {formatInteger(sample.temperature)} °C
-                                </p>
-                                <p className="flex items-center gap-1.5 mt-1.5 text-xs text-ink-soft tabular">
-                                    <CloudRain size={14} />
-                                    {formatInteger(sample.precipitationProbability)} %
-                                </p>
-                                <p className="flex items-center gap-1.5 mt-1 text-xs text-ink-soft tabular">
-                                    <Wind size={14} />
-                                    {formatInteger(sample.windSpeed)} km/h
-                                </p>
-                            </article>
+                    <canvas ref={canvasRef} className="w-full rounded-xl bg-canvas mb-3" style={{ height: 150 }} />
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[11px] text-ink-soft">
+                        {timeline.samples.map((s, i) => (
+                            <span key={s.label} className="flex items-center gap-1">
+                                <span className="inline-block w-3 h-0.5" style={{ background: COLORS[i % COLORS.length] }} />
+                                {s.label}
+                            </span>
                         ))}
+                        <span className="flex items-center gap-1">
+                            <span className="inline-block w-3 h-2 bg-blue-500/30" /> Prob. lluvia
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {timeline.samples.map((sample) => {
+                            const weather = describeWeather(sample.weatherCode);
+                            return (
+                                <article key={sample.label} className="bg-canvas border border-line rounded-xl p-3 min-w-0">
+                                    <p className="text-[10px] uppercase tracking-wide text-ink-faint truncate">{sample.label}</p>
+                                    <p className="text-xs text-ink-soft tabular mt-0.5">{formatTimeOfDay(sample.arrivalTime)}</p>
+                                    <p className="text-sm mt-1.5">{weather.icon} <span className="text-xs text-ink-soft">{weather.text}</span></p>
+                                    <p className="flex items-center gap-1.5 mt-1.5 text-ink font-semibold tabular">
+                                        <Thermometer size={15} className="text-clay" />
+                                        {formatInteger(sample.temperature)} °C
+                                    </p>
+                                    <p className="flex items-center gap-1.5 mt-1.5 text-xs text-ink-soft tabular">
+                                        <CloudRain size={14} />
+                                        {formatInteger(sample.precipitationProbability)} %
+                                    </p>
+                                    <p className="flex items-center gap-1.5 mt-1 text-xs text-ink-soft tabular">
+                                        <Wind size={14} />
+                                        {formatInteger(sample.windSpeed)} km/h
+                                    </p>
+                                </article>
+                            );
+                        })}
                     </div>
                     <p className="text-[11px] text-ink-faint mt-3">
                         Open-Meteo · {timeline.fromCache ? 'Previsión guardada en el dispositivo' : 'Actualizado ahora'}
