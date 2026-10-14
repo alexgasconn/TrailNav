@@ -621,24 +621,26 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
     const base = [
         {
             id: 'progress',
-            title: 'Progreso',
+            title: 'Progreso y elevación',
             items: [
-                { label: 'Recorrido real', value: formatDistance(metrics.actualDistance), tone: 'accent' as const },
+                { label: 'Recorrido', value: formatDistance(metrics.actualDistance), tone: 'accent' as const },
                 { label: 'Restante', value: formatDistance(metrics.distanceRemaining) },
                 { label: 'Completado', value: formatPercent(metrics.progress * 100) },
-            ],
-        },
-        {
-            id: 'elevation',
-            title: 'Elevación',
-            items: [
                 { label: 'Altitud', value: metrics.altitude != null ? formatElevation(metrics.altitude) : '—' },
                 {
-                    label: 'D+ real',
+                    label: 'D+',
                     value: metrics.actualAscent != null ? formatSignedElevation(metrics.actualAscent) : '—',
                     tone: 'accent' as const,
                 },
-                { label: 'D− real', value: metrics.actualDescent != null ? formatElevation(metrics.actualDescent) : '—' },
+                { label: 'D−', value: metrics.actualDescent != null ? formatElevation(metrics.actualDescent) : '—' },
+                {
+                    label: 'D+ restante',
+                    value: metrics.actualAscent != null ? formatElevation(Math.max(0, profile.totalAscent - metrics.actualAscent)) : '—',
+                },
+                {
+                    label: 'D− restante',
+                    value: metrics.actualDescent != null ? formatElevation(Math.max(0, profile.totalDescent - metrics.actualDescent)) : '—',
+                },
             ],
         },
         {
