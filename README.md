@@ -14,15 +14,15 @@
 
 <!-- Last updated: 2026-09-04 -->
 
-## Catalunya Incluida Y Navegacion Libre
+## Bundled Catalunya Map and Free Navigation
 
-- La pantalla Mapa y el acceso "Salir sin ruta" permiten seguimiento GPS sin GPX: velocidad, altitud, precision, zoom y orientacion por rumbo de movimiento.
-- Arrastrar el mapa pausa el seguimiento de camara; el boton de centrado lo recupera. La pantalla se mantiene encendida cuando el dispositivo, el permiso y el ajuste lo permiten.
-- `public/maps/catalunya.json` contiene cartografia real Natural Earth de dominio publico (<https://www.naturalearthdata.com/about/terms-of-use/>). Se incluye automaticamente en la cache de instalacion de la PWA, sin descargas regionales manuales.
-- Es un mapa de referencia a escala 1:10M: provincias, cinco poblaciones, rios y carreteras principales. NO contiene senderos, calles locales, relieve ni curvas de nivel, y no sustituye cartografia detallada para seguridad en montana. Fuera de la region no hay cobertura base incluida.
-- Los mapas raster detallados siguen siendo opcionales. Solo las regiones guardadas tienen detalle offline; el GPS no necesita internet, pero la primera apertura e instalacion de la app si. El navegador puede eliminar el almacenamiento si se borran sus datos.
-- Para regenerar los datos incluidos: `node scripts/build-catalunya.mjs`. No se descargan teselas masivamente para construir esta base.
-- Para probar la instalacion y el arranque offline: `npm run build` y `npm run preview`. El service worker esta desactivado en desarrollo para evitar versiones antiguas durante las pruebas.
+- The Map screen and the "Leave without a route" shortcut provide GPS tracking without a GPX: speed, altitude, accuracy, zoom and heading-based orientation.
+- Dragging the map pauses camera following; the center button resumes it. The screen stays on when the device, the permission and the setting allow it.
+- `public/maps/catalunya.json` contains real public-domain Natural Earth cartography (<https://www.naturalearthdata.com/about/terms-of-use/>). It is automatically included in the PWA install cache, with no manual regional downloads.
+- It is a 1:10M reference map: provinces, five towns, rivers and main roads. It does NOT contain trails, local streets, relief or contour lines, and it is not a substitute for detailed cartography for mountain safety. There is no bundled base coverage outside the region.
+- Detailed raster maps remain optional. Only saved regions have offline detail; GPS does not need internet, but the first open and installation do. The browser may delete storage if its data is cleared.
+- To regenerate the bundled data: `node scripts/build-catalunya.mjs`. Tiles are not bulk-downloaded to build this base.
+- To test installation and offline startup: `npm run build` and `npm run preview`. The service worker is disabled in development to avoid stale versions during testing.
 
 ---
 
@@ -34,15 +34,16 @@
 - 🗺️ **GPS Route Tracking** - Real-time position tracking on detailed maps
 - 📊 **Route Analysis** - Detailed elevation, distance, and time statistics
 - 🏔️ **Elevation Profiles** - Visualize gains and terrain difficulty
-  - Nuevo: relleno coloreado por pendiente por tramo, marcadores de POI en el perfil y toggles para mostrar/ocultar elementos
-  - Eje horizontal en km (también durante la navegación)
-- ➡️ **Dirección de la ruta** - Flechas sutiles sobre la traza indican el sentido de la marcha
-- 🔄 **Invertir sentido** - Botón en el análisis de ruta para cambiar inicio/final (y volver al original)
-- 🚗 **Cómo llegar al inicio** - Abre Google Maps con la ruta en coche hasta el punto de salida
-- 🧭 **Recorrido real** - Durante la navegación se dibuja en azul el camino realmente hecho; los km y D+/D− mostrados son los reales (GPS), no los de la traza GPX
-- 🗺️ **Mapa por defecto** - Topográfico OpenTopoMap (basado en OpenStreetMap)
-- ⏱️ **Tiempo estimado** - Mismos métodos que TrekkingPro: Naismith, Tobler (integrado punto a punto), Munter, Suizo DIN 33466 y Petzoldt. Se combinan con la media, o con la mediana si difieren más de un 10 %. Depende de tu perfil en Ajustes: forma física, ritmo, peso de la mochila y descansos (10 min/h)
-- 🌦️ **Meteorología en ruta** - En el análisis eliges día y hora de salida (próximos 7 días) y ves el tiempo en 5 puntos de la ruta durante las horas que se estima que durará. Datos de Open-Meteo. En el mapa, el botón de nube muestra esos 5 puntos con icono, temperatura, hora y probabilidad de lluvia
+  - Colored fill by slope grade per segment, POI markers on the profile and toggles to show/hide elements
+  - Horizontal axis in km (also during navigation)
+  - Light rolling-mean smoothing of elevation
+- ➡️ **Route Direction** - Subtle arrows along the track show the direction of travel
+- 🔄 **Reverse Route** - Button in route analysis to swap start/finish (and restore the original)
+- 🚗 **Directions to the Start** - Opens Google Maps with driving directions to the trailhead
+- 🧭 **Real Track** - During navigation the path actually walked is drawn in blue; the km and ascent/descent shown are the real ones (GPS), not those of the GPX track
+- 🗺️ **Default Map** - OpenTopoMap topographic (based on OpenStreetMap)
+- ⏱️ **Estimated Time** - Same methods as TrekkingPro: Naismith, Tobler (integrated point by point), Munter, Swiss DIN 33466 and Petzoldt. They are combined with the mean, or the median if they differ by more than 10%. It depends on your profile in Settings: fitness, pace, pack weight and breaks (10 min/h)
+- 🌦️ **Route Weather** - In the analysis you choose a start day and time (next 7 days) and see the weather at 5 points along the route for the hours it is expected to take. Data from Open-Meteo. On the map, the cloud button shows those 5 points with icon, temperature, time and rain probability
 - 📱 **Mobile First** - Optimized for Android, iOS, and tablets
 - 🔄 **GPX Import** - Import custom routes in GPX format
 - 💾 **Offline Maps** - Download map tiles for offline use
@@ -67,24 +68,24 @@
 - 🚀 **Performance** - Fast load times, optimized for low-end devices
 - 🔋 **Low Battery Mode** - Reduced animations to save power
 
-## 🗺️ Mapas disponibles
+## 🗺️ Available Maps
 
-Todos son teselas raster (verificadas con respuesta HTTP 200). Se cambian desde el botón de capas en el mapa y en la navegación, o desde Ajustes. La elección se guarda y es la que se descarga para uso sin conexión.
+All are raster tiles (verified with HTTP 200 responses). Switch them from the layers button on the map and in navigation, or from Settings. The choice is saved and is the one downloaded for offline use.
 
-| Estilo | Fuente | Zoom máx. | Uso recomendado |
+| Style | Source | Max zoom | Recommended use |
 | --- | --- | --- | --- |
-| Topográfico (OpenTopoMap) — **por defecto** | OpenTopoMap (datos OSM + SRTM) | 17 | Senderismo: curvas de nivel, sendas y cumbres |
-| Calles (OpenStreetMap) | tile.openstreetmap.org | 19 | Carreteras, pueblos y detalle urbano |
-| Topográfico (Esri) | Esri World Topo Map | 18 | Alternativa topográfica más clara |
-| Satélite (Esri) | Esri World Imagery | 18 | Ver terreno real, pistas y vegetación |
-| Claro (CARTO Voyager) | basemaps.cartocdn.com | 19 | Fondo limpio y legible |
+| Topographic (OpenTopoMap) — **default** | OpenTopoMap (OSM + SRTM data) | 17 | Hiking: contour lines, trails and summits |
+| Streets (OpenStreetMap) | tile.openstreetmap.org | 19 | Roads, towns and urban detail |
+| Topographic (Esri) | Esri World Topo Map | 18 | A lighter topographic alternative |
+| Satellite (Esri) | Esri World Imagery | 18 | Real terrain, tracks and vegetation |
+| Light (CARTO Voyager) | basemaps.cartocdn.com | 19 | Clean, readable background |
 
-Además, el modo "Catalunya · incluida" del explorador usa un mapa base vectorial incluido en la app (`public/maps/catalunya.json`) que funciona sin red.
+In addition, the "Catalunya · bundled" mode of the explorer uses a vector base map included in the app (`public/maps/catalunya.json`) that works without a network.
 
-Notas:
+Notes:
 
-- Los estilos Stamen se han retirado porque su servicio de teselas ya no está disponible; los ajustes guardados con estilos retirados pasan automáticamente al topográfico (Carto/Esri duplicados se asignan a su equivalente).
-- Los proveedores públicos limitan el uso intensivo: descarga solo las zonas que necesites para offline.
+- The Stamen styles were removed because their tile service is no longer available; saved settings using removed styles automatically fall back to topographic (duplicate Carto/Esri styles map to their equivalent).
+- Public providers limit heavy use: download only the areas you need for offline.
 
 ---
 
@@ -187,8 +188,10 @@ npm run preview  # Test build locally
 - Check total distance and elevation gain
 - Analyze difficulty level
 - Plan estimated time
-- Tap **Invertir sentido** to run the route end-to-start (tap again to restore; disabled while navigating it)
-- Tap **Cómo llegar al inicio** to get driving directions to the start in Google Maps
+- Tap **Reverse direction** (UI: "Invertir sentido") to run the route end-to-start (tap again to restore; disabled while navigating it)
+- Tap **Directions to the start** (UI: "Cómo llegar al inicio") to get driving directions to the trailhead in Google Maps
+- Pick a start day/time and see the weather along the route for its estimated duration
+- Tune your hiking profile (fitness, pace, pack, breaks) in Settings to adjust the time estimate
 
 ### Offline Mode
 
