@@ -362,15 +362,15 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
         const profile = getRouteProfile(route);
         const totalDistance = profile.totalDistance || route.distance;
         const done = Math.min(Math.max(distanceDone, 0), totalDistance);
-        const remaining = Math.max(0, totalDistance - done);
+        const actual = trackRef.current;
+        const actualDistance = actual.distance;
+        const remaining = Math.max(0, totalDistance - actualDistance);
 
         const reference = status === 'paused' && pausedAtRef.current ? pausedAtRef.current : Date.now();
         const elapsedMs = Math.max(0, reference - startedAtRef.current);
         const movingMs = Math.max(0, elapsedMs - pausedTotalRef.current);
         const movingSeconds = Math.floor(movingMs / 1000);
 
-        const actual = trackRef.current;
-        const actualDistance = actual.distance;
         const averageSpeed = movingSeconds > 30 && actualDistance > 20 ? actualDistance / 1000 / (movingSeconds / 3600) : null;
         const paceSeconds = averageSpeed && averageSpeed > 0.2 ? 3600 / averageSpeed : null;
         const remainingSeconds = averageSpeed && averageSpeed > 0.5 ? (remaining / 1000 / averageSpeed) * 3600 : null;
@@ -381,7 +381,7 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             totalDistance,
             distanceDone: done,
             distanceRemaining: remaining,
-            progress: totalDistance > 0 ? done / totalDistance : 0,
+            progress: totalDistance > 0 ? Math.min(1, actualDistance / totalDistance) : 0,
             elapsedSeconds: Math.floor(elapsedMs / 1000),
             movingSeconds,
             currentSpeed: status === 'paused' ? 0 : position?.speed ?? null,

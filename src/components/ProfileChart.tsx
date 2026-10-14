@@ -21,11 +21,62 @@ type Props = {
     showDistanceAxis?: boolean;
 };
 
-function slopeColor(pct: number, moderate: number, steep: number) {
+const GRADE_STOPS: [number, [number, number, number]][] = [
+    [0, [63, 143, 90]],
+    [4, [139, 191, 74]],
+    [8, [230, 194, 41]],
+    [12, [240, 138, 36]],
+    [18, [217, 56, 30]],
+    [25, [127, 29, 29]],
+];
+
+/** Color continuo según la pendiente absoluta (%). */
+function slopeColor(pct: number, _moderate?: number, _steep?: number) {
     const abs = Math.abs(pct);
-    if (abs >= steep) return '#b3261e'; // alert red
-    if (abs >= moderate) return '#f59e0b'; // orange
-    return '#3f6b52'; // moss green
+    const last = GRADE_STOPS[GRADE_STOPS.length - 1];
+    if (abs >= last[0]) return `rgb(${last[1].join(',')})`;
+    for (let i = 1; i < GRADE_STOPS.length; i += 1) {
+        const [g1, c1] = GRADE_STOPS[i];
+        if (abs <= g1) {
+            const [g0, c0] = GRADE_STOPS[i - 1];
+            const t = (abs - g0) / (g1 - g0);
+            return `rgb(${c0.map((v, k) => Math.round(v + (c1[k] - v) * t)).join(',')})`;
+        }
+    }
+    return `rgb(${GRADE_STOPS[0][1].join(',')})`;
+}
+
+const SMOOTH_HALF_WINDOW = 40; // metros a cada lado
+
+/** Media móvil por distancia y pendiente (%) sobre la elevación suavizada. */
+function smoothProfile(profile: RouteProfile) {
+    const d = profile.cumulativeDistance;
+    const n = d.length;
+    const elev = new Float64Array(n);
+    const grade = new Float64Array(n);
+    let lo = 0;
+    let hi = 0;
+    let sum = 0;
+    for (let i = 0; i < n; i += 1) {
+        while (hi < n && d[hi] <= d[i] + SMOOTH_HALF_WINDOW) {
+            sum += profile.elevation[hi];
+            hi += 1;
+        }
+        while (d[lo] < d[i] - SMOOTH_HALF_WINDOW) {
+            sum -= profile.elevation[lo];
+            lo += 1;
+        }
+        elev[i] = sum / Math.max(1, hi - lo);
+    }
+    for (let i = 0; i < n; i += 1) {
+        let j = i;
+        let k = i;
+        while (j < n - 1 && d[j] - d[i] < SMOOTH_HALF_WINDOW) j += 1;
+        while (k > 0 && d[i] - d[k] < SMOOTH_HALF_WINDOW) k -= 1;
+        const span = d[j] - d[k];
+        grade[i] = span > 0 ? ((elev[j] - elev[k]) / span) * 100 : 0;
+    }
+    return { elev, grade };
 }
 
 export function ProfileChart({
@@ -59,6 +110,7 @@ export function ProfileChart({
         ctx.scale(ratio, ratio);
         ctx.clearRect(0, 0, width, height);
 
+        const { elev, grade } = smoothProfile(profile);
         const range = Math.max(1, profile.maxElevation - profile.minElevation);
         const padding = 6;
         const usableH = h - padding * 2;
@@ -78,10 +130,9 @@ export function ProfileChart({
                 for (let i = 0; i < profile.coordinates.length - 1; i += 1) {
                     const d0 = profile.cumulativeDistance[i];
                     const d1 = profile.cumulativeDistance[i + 1];
-                    const e0 = profile.elevation[i];
-                    const e1 = profile.elevation[i + 1];
-                    const dx = Math.max(0.0001, d1 - d0);
-                    const slopePct = ((e1 - e0) / dx) * 100; // percent
+                    const e0 = elev[i];
+                    const e1 = elev[i + 1];
+                    const slopePct = grade[i];
 
                     const x0 = toX(d0);
                     const y0 = toY(e0);
@@ -102,7 +153,7 @@ export function ProfileChart({
                 ctx.moveTo(0, h);
                 for (let i = 0; i < profile.coordinates.length; i += 1) {
                     const x = toX(profile.cumulativeDistance[i]);
-                    const y = toY(profile.elevation[i]);
+                    const y = toY(elev[i]);
                     ctx.lineTo(x, y);
                 }
                 ctx.lineTo(width, h);
@@ -117,10 +168,9 @@ export function ProfileChart({
         for (let i = 0; i < profile.coordinates.length - 1; i += 1) {
             const d0 = profile.cumulativeDistance[i];
             const d1 = profile.cumulativeDistance[i + 1];
-            const e0 = profile.elevation[i];
-            const e1 = profile.elevation[i + 1];
-            const dx = Math.max(0.0001, d1 - d0);
-            const slopePct = ((e1 - e0) / dx) * 100; // percent
+            const e0 = elev[i];
+            const e1 = elev[i + 1];
+            const slopePct = grade[i];
             ctx.beginPath();
             ctx.strokeStyle = slopeColor(slopePct, moderateThreshold, steepThreshold);
             const x0 = toX(d0);
@@ -136,7 +186,7 @@ export function ProfileChart({
         ctx.beginPath();
         for (let i = 0; i < profile.coordinates.length; i += 1) {
             const x = toX(profile.cumulativeDistance[i]);
-            const y = toY(profile.elevation[i]);
+            const y = toY(elev[i]);
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         }
@@ -181,8 +231,8 @@ export function ProfileChart({
             const next = Math.min(idx + 1, profile.coordinates.length - 1);
             const span = profile.cumulativeDistance[next] - profile.cumulativeDistance[idx] || 1;
             const ratio = (clamped - profile.cumulativeDistance[idx]) / span;
-            const elev = profile.elevation[idx] + (profile.elevation[next] - profile.elevation[idx]) * ratio;
-            const yi = toY(elev);
+            const elevAt = elev[idx] + (elev[next] - elev[idx]) * ratio;
+            const yi = toY(elevAt);
             ctx.beginPath();
             ctx.fillStyle = '#111827';
             ctx.arc(xi, yi, 4, 0, Math.PI * 2);

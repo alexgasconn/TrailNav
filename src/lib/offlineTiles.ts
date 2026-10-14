@@ -20,7 +20,7 @@ const TILE_SOURCES: Record<MapStyleId, { url: (z: number, x: number, y: number) 
         maxZoom: 19,
     },
     carto: {
-        url: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`,
+        url: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png?key=cb1_2hl3_1_c4dfd0f0c288bbb5cd981bed`,
         attribution: '© CARTO, © OpenStreetMap',
         maxZoom: 19,
     },

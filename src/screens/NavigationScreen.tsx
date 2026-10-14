@@ -624,7 +624,6 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
             title: 'Progreso',
             items: [
                 { label: 'Recorrido real', value: formatDistance(metrics.actualDistance), tone: 'accent' as const },
-                { label: 'Avance en ruta', value: formatDistance(metrics.distanceDone) },
                 { label: 'Restante', value: formatDistance(metrics.distanceRemaining) },
                 { label: 'Completado', value: formatPercent(metrics.progress * 100) },
             ],
@@ -640,8 +639,6 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
                     tone: 'accent' as const,
                 },
                 { label: 'D− real', value: metrics.actualDescent != null ? formatElevation(metrics.actualDescent) : '—' },
-                { label: 'D+ restante', value: metrics.ascentRemaining != null ? formatElevation(metrics.ascentRemaining) : '—' },
-                { label: 'D− restante', value: metrics.descentRemaining != null ? formatElevation(metrics.descentRemaining) : '—' },
             ],
         },
         {
@@ -654,19 +651,6 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
                 { label: 'En movimiento', value: formatClock(metrics.movingSeconds) },
                 { label: 'Restante', value: metrics.remainingSeconds != null ? formatClock(metrics.remainingSeconds) : '—' },
                 { label: 'Llegada', value: metrics.arrivalTimestamp != null ? formatTimeOfDay(metrics.arrivalTimestamp) : '—' },
-            ],
-        },
-        {
-            id: 'gps',
-            title: 'Señal y ruta',
-            items: [
-                {
-                    label: 'Precisión',
-                    value: metrics.accuracy != null ? formatDistance(metrics.accuracy) : '—',
-                    tone: metrics.accuracy != null && metrics.accuracy > 25 ? ('warn' as const) : ('default' as const),
-                },
-                { label: 'Desvío', value: metrics.distanceFromRoute != null ? formatDistance(metrics.distanceFromRoute) : '—' },
-                { label: 'Total ruta', value: formatDistance(metrics.totalDistance) },
             ],
         },
     ];
@@ -715,7 +699,7 @@ function buildInfoWindows(
 
         const content = (
             <div className="p-0">
-                <ProfileChart profile={profile} height={200} currentDistance={metrics.distanceDone ?? null} showPoints={false} showSegments={false} showColoredFill={false} />
+                <ProfileChart profile={profile} height={200} currentDistance={metrics.distanceDone ?? null} showPoints={false} showSegments={false} showColoredFill />
             </div>
         );
 
