@@ -35,6 +35,12 @@
 - 📊 **Route Analysis** - Detailed elevation, distance, and time statistics
 - 🏔️ **Elevation Profiles** - Visualize gains and terrain difficulty
   - Nuevo: relleno coloreado por pendiente por tramo, marcadores de POI en el perfil y toggles para mostrar/ocultar elementos
+  - Eje horizontal en km (también durante la navegación)
+- ➡️ **Dirección de la ruta** - Flechas sutiles sobre la traza indican el sentido de la marcha
+- 🔄 **Invertir sentido** - Botón en el análisis de ruta para cambiar inicio/final (y volver al original)
+- 🚗 **Cómo llegar al inicio** - Abre Google Maps con la ruta en coche hasta el punto de salida
+- 🧭 **Recorrido real** - Durante la navegación se dibuja en azul el camino realmente hecho; los km y D+/D− mostrados son los reales (GPS), no los de la traza GPX
+- 🗺️ **Mapa por defecto** - Topográfico OpenTopoMap (basado en OpenStreetMap)
 - 📱 **Mobile First** - Optimized for Android, iOS, and tablets
 - 🔄 **GPX Import** - Import custom routes in GPX format
 - 💾 **Offline Maps** - Download map tiles for offline use
@@ -58,6 +64,25 @@
 - ♿ **Accessible** - WCAG 2.1 AA compliant
 - 🚀 **Performance** - Fast load times, optimized for low-end devices
 - 🔋 **Low Battery Mode** - Reduced animations to save power
+
+## 🗺️ Mapas disponibles
+
+Todos son teselas raster (verificadas con respuesta HTTP 200). Se cambian desde el botón de capas en el mapa y en la navegación, o desde Ajustes. La elección se guarda y es la que se descarga para uso sin conexión.
+
+| Estilo | Fuente | Zoom máx. | Uso recomendado |
+| --- | --- | --- | --- |
+| Topográfico (OpenTopoMap) — **por defecto** | OpenTopoMap (datos OSM + SRTM) | 17 | Senderismo: curvas de nivel, sendas y cumbres |
+| Calles (OpenStreetMap) | tile.openstreetmap.org | 19 | Carreteras, pueblos y detalle urbano |
+| Topográfico (Esri) | Esri World Topo Map | 18 | Alternativa topográfica más clara |
+| Satélite (Esri) | Esri World Imagery | 18 | Ver terreno real, pistas y vegetación |
+| Claro (CARTO Voyager) | basemaps.cartocdn.com | 19 | Fondo limpio y legible |
+
+Además, el modo "Catalunya · incluida" del explorador usa un mapa base vectorial incluido en la app (`public/maps/catalunya.json`) que funciona sin red.
+
+Notas:
+
+- Los estilos Stamen se han retirado porque su servicio de teselas ya no está disponible; los ajustes guardados con estilos retirados pasan automáticamente al topográfico (Carto/Esri duplicados se asignan a su equivalente).
+- Los proveedores públicos limitan el uso intensivo: descarga solo las zonas que necesites para offline.
 
 ---
 
@@ -144,9 +169,10 @@ npm run preview  # Test build locally
 
 1. Select a route from "Your Routes"
 2. Tap **"Navigate Now"** button
-3. Follow the emerald green line on the map
+3. Follow the orange line on the map (arrows show the direction); your real path is drawn in blue
 4. Real-time metrics show:
-   - Distance remaining
+   - Real distance and real ascent/descent walked (from GPS, may differ from the GPX)
+   - Progress along the route and distance remaining
    - Current speed
    - Elevation
    - GPS accuracy
@@ -159,6 +185,8 @@ npm run preview  # Test build locally
 - Check total distance and elevation gain
 - Analyze difficulty level
 - Plan estimated time
+- Tap **Invertir sentido** to run the route end-to-start (tap again to restore; disabled while navigating it)
+- Tap **Cómo llegar al inicio** to get driving directions to the start in Google Maps
 
 ### Offline Mode
 

@@ -4,7 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
 import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Layers, Eye, EyeOff, Satellite } from 'lucide-react';
 import { Screen } from '../App';
-import { Route, getSettings, saveSettings, MapStyleId } from '../lib/db';
+import { Route, getSettings, saveSettings, MapStyleId, MAP_STYLE_IDS } from '../lib/db';
 import { SessionMetrics, useNavigationSession } from '../state/navigationSession';
 import { getRouteProfile } from '../lib/routeProfile';
 import { getRoutePoints } from '../lib/routePoints';
@@ -15,6 +15,7 @@ import {
     createRoutePointMarker,
     createUserMarkerElement,
     setRouteAlertState,
+    setActualTrack,
     updateUserMarkerElement,
     MAP_STYLE_LABELS,
 } from '../lib/mapStyles';
@@ -44,7 +45,9 @@ export function NavigationScreen({ onNavigate }: { onNavigate: (s: Screen, r?: R
 
 function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: Screen, r?: Route) => void }) {
     const session = useNavigationSession();
-    const { status, metrics, position, heading, course, gpsError } = session;
+    const { status, metrics, position, heading, course, gpsError, trail } = session;
+    const trailRef = useRef(trail);
+    trailRef.current = trail;
 
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
@@ -118,7 +121,8 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 });
                 map.on('dragstart', () => setFollowing(false));
                 map.on('load', () => {
-                    addRouteLayers(map, route.geoJson, { width: 6, showProgress: true });
+                    addRouteLayers(map, route.geoJson, { width: 6, showProgress: true, showActualTrack: true });
+                    setActualTrack(map, trailRef.current);
 
                     routePoints
                         .filter((point) => point.kind !== 'turn')
@@ -271,29 +275,15 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     } catch (e) { }
                 });
 
-                // When style is changed dynamically, re-apply route layers after style load
-                try {
-                    map.on('styledata', () => {
-                        try {
-                            // Re-apply route layers after a style change.
-                            addRouteLayers(map, route.geoJson, { width: 6, showProgress: true });
-                        } catch (e) { }
-                    });
-                } catch (e) { }
-                // close map menu if clicking outside
-                try {
-                    const onDocClick = (ev: MouseEvent) => {
-                        if (!showMapMenu) return;
-                        const btn = mapMenuButtonRef.current;
-                        const tgt = ev.target as Node | null;
-                        const menu = document.querySelector('[data-map-menu]');
-                        // don't close if clicking the button or inside the menu
-                        if (btn && tgt && (btn.contains(tgt) || (menu && menu.contains && menu.contains(tgt)))) return;
-                        setShowMapMenu(false);
-                    };
-                    document.addEventListener('click', onDocClick);
-                    map.on('remove', () => document.removeEventListener('click', onDocClick));
-                } catch (e) { }
+                // Tras cambiar de estilo se pierden fuentes y capas: se vuelven a crear.
+                map.on('style.load', () => {
+                    try {
+                        addRouteLayers(map, route.geoJson, { width: 6, showProgress: true, showActualTrack: true });
+                        setActualTrack(map, trailRef.current);
+                        lastProgressRef.current = -1;
+                        setRouteAlertState(map, false);
+                    } catch (e) { }
+                });
             } catch (e) {
                 // eslint-disable-next-line no-console
                 console.error('Map init error', e);
@@ -420,8 +410,26 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     useEffect(() => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
+        setActualTrack(map, trail);
+    }, [trail, mapReady]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
         setRouteAlertState(map, Boolean(metrics?.offRoute));
     }, [metrics?.offRoute, mapReady]);
+
+    const changeMapStyle = async (style: MapStyleId) => {
+        setShowMapMenu(false);
+        setMapStyle(style);
+        mapRef.current?.setStyle(buildMapStyle(style), { diff: false });
+        try {
+            const current = await getSettings();
+            await saveSettings({ ...current, mapStyle: style });
+        } catch (e) {
+            console.warn('No se pudo guardar el estilo de mapa', e);
+        }
+    };
 
     const panels = useMemo(() => buildPanels(metrics, profile, route, slopeWindowMeters, setSlopeWindowMeters), [metrics, profile, route, slopeWindowMeters]);
 
@@ -444,7 +452,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     <div className="flex-1 min-w-0 bg-surface/95 border border-line rounded-xl px-3 py-2 shadow-sm">
                         <p className="text-sm font-semibold text-ink truncate">{route.name}</p>
                         <p className="text-[11px] text-ink-faint tabular">
-                            {formatDistance(metrics?.distanceDone ?? 0)} de {formatDistance(metrics?.totalDistance ?? 0)}
+                            {formatDistance(metrics?.actualDistance ?? 0)} de {formatDistance(metrics?.totalDistance ?? 0)}
                         </p>
                     </div>
 
@@ -473,48 +481,26 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                             <Layers size={20} />
                         </button>
                         {showMapMenu && (
-                            <div data-map-menu="true" className="absolute right-0 mt-2 w-44 bg-surface border border-line rounded-xl shadow-lg z-40">
-                                {(
-                                    ['topo', 'carto', 'carto_voyager', 'stamen', 'stamen_toner', 'stamen_watercolor', 'esri', 'satellite'] as MapStyleId[]
-                                ).map((s) => (
-                                    <button
-                                        key={s}
-                                        onClick={async (ev) => {
-                                            // prevent document click handlers from interfering
-                                            try {
-                                                ev.stopPropagation();
-                                            } catch (e) { }
-                                            setShowMapMenu(false);
-                                            setMapStyle(s);
-                                            try {
-                                                const current = await getSettings();
-                                                await saveSettings({ ...current, mapStyle: s });
-                                            } catch (e) {
-                                                // eslint-disable-next-line no-console
-                                                console.warn('Failed to save map style', e);
-                                            }
-                                            try {
-                                                const m = mapRef.current;
-                                                if (m) {
-                                                    // provide small visual feedback while switching
-                                                    try { setMapError(`Aplicando estilo ${s}…`); } catch (e) { }
-                                                    m.setStyle(buildMapStyle(s));
-                                                    try { setMapError(null); } catch (e) { }
-                                                } else {
-                                                    try { setMapError('Mapa no inicializado'); } catch (e) { }
-                                                }
-                                            } catch (e) {
-                                                // eslint-disable-next-line no-console
-                                                console.error('Error applying map style', e);
-                                                try { setMapError(String(e)); } catch (err) { }
-                                            }
-                                        }}
-                                        className={`w-full text-left px-3 py-2 hover:bg-surface/80 ${mapStyle === s ? 'font-semibold' : ''}`}
-                                    >
-                                        {MAP_STYLE_LABELS[s] ?? s}
-                                    </button>
-                                ))}
-                            </div>
+                            <>
+                                <button
+                                    type="button"
+                                    aria-label="Cerrar selector de mapa"
+                                    className="pointer-events-auto fixed inset-0 z-30 cursor-default"
+                                    onClick={() => setShowMapMenu(false)}
+                                />
+                                <div className="pointer-events-auto absolute right-0 mt-2 w-60 bg-surface border border-line rounded-xl shadow-lg z-40 p-1">
+                                    {MAP_STYLE_IDS.map((s) => (
+                                        <button
+                                            key={s}
+                                            type="button"
+                                            onClick={() => changeMapStyle(s)}
+                                            className={`w-full text-left px-3 py-3 rounded-lg text-sm ${mapStyle === s ? 'bg-moss-soft text-moss-strong font-semibold' : 'text-ink-soft'}`}
+                                        >
+                                            {MAP_STYLE_LABELS[s]}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
                         )}
                     </div>
                 </div>
@@ -604,7 +590,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     <div className="w-full max-w-sm bg-surface border border-line rounded-2xl p-5">
                         <h2 className="text-base font-semibold text-ink">Finalizar navegación</h2>
                         <p className="text-sm text-ink-soft mt-2">
-                            Llevas {formatDistance(metrics?.distanceDone ?? 0)} en {formatClock(metrics?.movingSeconds ?? 0)}. La
+                            Llevas {formatDistance(metrics?.actualDistance ?? 0)} en {formatClock(metrics?.movingSeconds ?? 0)}. La
                             sesión se cerrará y el progreso se descartará.
                         </p>
                         <div className="flex gap-2 mt-5">
@@ -637,7 +623,8 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
             id: 'progress',
             title: 'Progreso',
             items: [
-                { label: 'Recorrido', value: formatDistance(metrics.distanceDone), tone: 'accent' as const },
+                { label: 'Recorrido real', value: formatDistance(metrics.actualDistance), tone: 'accent' as const },
+                { label: 'Avance en ruta', value: formatDistance(metrics.distanceDone) },
                 { label: 'Restante', value: formatDistance(metrics.distanceRemaining) },
                 { label: 'Completado', value: formatPercent(metrics.progress * 100) },
             ],
@@ -648,10 +635,11 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
             items: [
                 { label: 'Altitud', value: metrics.altitude != null ? formatElevation(metrics.altitude) : '—' },
                 {
-                    label: 'D+ acumulado',
-                    value: metrics.ascentDone != null ? formatSignedElevation(metrics.ascentDone) : '—',
+                    label: 'D+ real',
+                    value: metrics.actualAscent != null ? formatSignedElevation(metrics.actualAscent) : '—',
                     tone: 'accent' as const,
                 },
+                { label: 'D− real', value: metrics.actualDescent != null ? formatElevation(metrics.actualDescent) : '—' },
                 { label: 'D+ restante', value: metrics.ascentRemaining != null ? formatElevation(metrics.ascentRemaining) : '—' },
                 { label: 'D− restante', value: metrics.descentRemaining != null ? formatElevation(metrics.descentRemaining) : '—' },
             ],

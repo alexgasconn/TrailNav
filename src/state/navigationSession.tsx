@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Route, Settings, getRoute } from '../lib/db';
 import { getRouteProfile, sampleProfile } from '../lib/routeProfile';
 import { matchPosition } from '../lib/mapMatching';
+import { ActualTrack, addTrackPoint, createActualTrack, replayTrack } from '../lib/actualTrack';
 
 export type SessionStatus = 'idle' | 'active' | 'paused';
 
@@ -29,6 +30,10 @@ export interface SessionMetrics {
     altitude: number | null;
     ascentDone: number | null;
     descentDone: number | null;
+    /** Km realmente recorridos por el usuario (no los de la traza GPX). */
+    actualDistance: number;
+    actualAscent: number | null;
+    actualDescent: number | null;
     ascentRemaining: number | null;
     descentRemaining: number | null;
     remainingSeconds: number | null;
@@ -57,6 +62,8 @@ interface NavigationSessionValue {
     heading: number | null;
     /** Rumbo de desplazamiento suavizado, solo con movimiento real. */
     course: number | null;
+    /** Recorrido real del usuario [lng, lat]. */
+    trail: [number, number][];
     gpsError: string | null;
     hydrated: boolean;
     startSession: (route: Route) => void;
@@ -68,6 +75,7 @@ interface NavigationSessionValue {
 }
 
 const STORAGE_KEY = 'trailnav-active-session';
+const TRACK_KEY = 'trailnav-active-track';
 const MAX_TRUSTED_ACCURACY = 50;
 
 const NavigationSessionContext = createContext<NavigationSessionValue | null>(null);
@@ -101,6 +109,7 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
     const [gpsError, setGpsError] = useState<string | null>(null);
     const [hydrated, setHydrated] = useState(false);
     const [tick, setTick] = useState(0);
+    const [trackVersion, setTrackVersion] = useState(0);
     const [deviationThreshold, setDeviationThreshold] = useState(30);
     const [screenAlwaysOn, setScreenAlwaysOn] = useState(true);
 
@@ -113,6 +122,15 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
     const courseRef = useRef<number | null>(null);
     const vibrationEnabledRef = useRef(true);
     const wasOffRouteRef = useRef(false);
+    const trackRef = useRef<ActualTrack>(createActualTrack());
+
+    const persistTrack = useCallback(() => {
+        try {
+            localStorage.setItem(TRACK_KEY, JSON.stringify(trackRef.current.points));
+        } catch {
+            /* almacenamiento lleno: el recorrido sigue en memoria */
+        }
+    }, []);
 
     // Rehidratación de la sesión tras cerrar o recargar la aplicación.
     useEffect(() => {
@@ -131,6 +149,13 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
                 pausedTotalRef.current = persisted.pausedTotalMs;
                 pausedAtRef.current = persisted.pausedAt;
                 setRoute(storedRoute);
+                try {
+                    const rawTrack = localStorage.getItem(TRACK_KEY);
+                    trackRef.current = rawTrack ? replayTrack(JSON.parse(rawTrack)) : createActualTrack();
+                    setTrackVersion((value) => value + 1);
+                } catch {
+                    trackRef.current = createActualTrack();
+                }
                 setDistanceDone(persisted.distanceDone);
                 setPosition(persisted.position);
                 setStatus(persisted.status);
@@ -208,6 +233,10 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
                 });
 
                 const matched = matchPosition(route, [longitude, latitude]);
+                if (addTrackPoint(trackRef.current, longitude, latitude, typeof altitude === 'number' ? altitude : null, accuracy ?? null)) {
+                    setTrackVersion((value) => value + 1);
+                    if (trackRef.current.points.length % 10 === 0) persistTrack();
+                }
                 if (!matched) return;
                 setDistanceFromRoute(matched.distanceFromRoute);
 
@@ -226,7 +255,19 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
                 watchIdRef.current = null;
             }
         };
-    }, [status, route, deviationThreshold]);
+    }, [status, route, deviationThreshold, persistTrack]);
+
+    // Guarda el recorrido real al ocultar o cerrar la app.
+    useEffect(() => {
+        if (status === 'idle') return;
+        const flush = () => persistTrack();
+        window.addEventListener('pagehide', flush);
+        document.addEventListener('visibilitychange', flush);
+        return () => {
+            window.removeEventListener('pagehide', flush);
+            document.removeEventListener('visibilitychange', flush);
+        };
+    }, [status, persistTrack]);
 
     useEffect(() => {
         let cancelled = false;
@@ -260,6 +301,9 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
         pausedAtRef.current = null;
         courseRef.current = null;
         wasOffRouteRef.current = false;
+        trackRef.current = createActualTrack();
+        localStorage.removeItem(TRACK_KEY);
+        setTrackVersion((value) => value + 1);
         setRoute(nextRoute);
         setDistanceDone(0);
         setDistanceFromRoute(null);
@@ -299,6 +343,9 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
         startedAtRef.current = 0;
         pausedTotalRef.current = 0;
         pausedAtRef.current = null;
+        trackRef.current = createActualTrack();
+        setTrackVersion((value) => value + 1);
+        localStorage.removeItem(TRACK_KEY);
         localStorage.removeItem(STORAGE_KEY);
     }, []);
 
@@ -322,7 +369,9 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
         const movingMs = Math.max(0, elapsedMs - pausedTotalRef.current);
         const movingSeconds = Math.floor(movingMs / 1000);
 
-        const averageSpeed = movingSeconds > 30 && done > 20 ? done / 1000 / (movingSeconds / 3600) : null;
+        const actual = trackRef.current;
+        const actualDistance = actual.distance;
+        const averageSpeed = movingSeconds > 30 && actualDistance > 20 ? actualDistance / 1000 / (movingSeconds / 3600) : null;
         const paceSeconds = averageSpeed && averageSpeed > 0.2 ? 3600 / averageSpeed : null;
         const remainingSeconds = averageSpeed && averageSpeed > 0.5 ? (remaining / 1000 / averageSpeed) * 3600 : null;
 
@@ -341,6 +390,9 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             altitude: position?.altitude ?? sample?.elevation ?? null,
             ascentDone: sample?.ascent ?? null,
             descentDone: sample?.descent ?? null,
+            actualDistance,
+            actualAscent: actual.hasAltitude ? actual.ascent : null,
+            actualDescent: actual.hasAltitude ? actual.descent : null,
             ascentRemaining: sample?.remainingAscent ?? null,
             descentRemaining: sample?.remainingDescent ?? null,
             remainingSeconds,
@@ -349,7 +401,12 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             distanceFromRoute,
             accuracy: position?.accuracy ?? null,
         };
-    }, [route, status, distanceDone, distanceFromRoute, position, deviationThreshold, tick]);
+    }, [route, status, distanceDone, distanceFromRoute, position, deviationThreshold, tick, trackVersion]);
+
+    const trail = useMemo<[number, number][]>(() => {
+        void trackVersion;
+        return trackRef.current.points.map((point) => [point[0], point[1]]);
+    }, [trackVersion]);
 
     useEffect(() => {
         if (!route || status === 'idle') return;
@@ -387,6 +444,7 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             position,
             heading,
             course,
+            trail,
             gpsError,
             hydrated,
             startSession,
@@ -403,6 +461,7 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             position,
             heading,
             course,
+            trail,
             gpsError,
             hydrated,
             startSession,

@@ -11,17 +11,20 @@ export interface Route {
   gpxData: string;
   geoJson: any;
   createdAt: number;
+  /** true si el sentido original del GPX se ha invertido. */
+  reversed?: boolean;
 }
 
-export type MapStyleId =
-  | 'topo'
-  | 'satellite'
-  | 'carto'
-  | 'stamen'
-  | 'carto_voyager'
-  | 'stamen_toner'
-  | 'stamen_watercolor'
-  | 'esri';
+export type MapStyleId = 'topo' | 'osm' | 'satellite' | 'carto' | 'esri_topo';
+
+export const MAP_STYLE_IDS: MapStyleId[] = ['topo', 'osm', 'esri_topo', 'satellite', 'carto'];
+
+/** Ajustes guardados con estilos retirados (Stamen, duplicados de Carto/Esri) vuelven al topográfico. */
+function normalizeStyle(style: unknown): MapStyleId {
+  if (style === 'carto_voyager') return 'carto';
+  if (style === 'esri') return 'satellite';
+  return MAP_STYLE_IDS.includes(style as MapStyleId) ? (style as MapStyleId) : 'topo';
+}
 
 export interface MapRegion {
   id: string;
@@ -115,7 +118,9 @@ export function getDB() {
 export async function getSettings(): Promise<Settings> {
   const db = await getDB();
   const stored = await db.get('settings', DEFAULT_SETTINGS.id);
-  if (stored) return { ...DEFAULT_SETTINGS, ...stored, id: DEFAULT_SETTINGS.id };
+  if (stored) {
+    return { ...DEFAULT_SETTINGS, ...stored, id: DEFAULT_SETTINGS.id, mapStyle: normalizeStyle(stored.mapStyle) };
+  }
   await db.put('settings', DEFAULT_SETTINGS);
   return DEFAULT_SETTINGS;
 }

@@ -5,45 +5,28 @@ export const TILE_PROTOCOL = 'trailnav';
 
 const TILE_SOURCES: Record<MapStyleId, { url: (z: number, x: number, y: number) => string; attribution: string; maxZoom: number }> = {
     topo: {
-        url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
-        attribution: '© OpenStreetMap',
-        maxZoom: 19,
+        url: (z, x, y) => `https://tile.opentopomap.org/${z}/${x}/${y}.png`,
+        attribution: '© OpenStreetMap, SRTM · © OpenTopoMap (CC-BY-SA)',
+        maxZoom: 17,
     },
     satellite: {
         url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
         attribution: '© Esri, Maxar, Earthstar Geographics',
         maxZoom: 18,
     },
+    osm: {
+        url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+    },
     carto: {
-        // CARTO Voyager (use provided API key param)
-        url: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png?key=cb1_2hl3_1_c4dfd0f0c288bbb5cd981bed`,
-        attribution: '© Carto, © OpenStreetMap',
+        url: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`,
+        attribution: '© CARTO, © OpenStreetMap',
         maxZoom: 19,
     },
-    carto_voyager: {
-        url: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png?key=cb1_2hl3_1_c4dfd0f0c288bbb5cd981bed`,
-        attribution: '© Carto, © OpenStreetMap',
-        maxZoom: 19,
-    },
-    stamen: {
-        // Stamen Terrain (https)
-        url: (z, x, y) => `https://stamen-tiles.a.ssl.fastly.net/terrain/${z}/${x}/${y}.jpg`,
-        attribution: 'Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.',
-        maxZoom: 18,
-    },
-    stamen_toner: {
-        url: (z, x, y) => `https://stamen-tiles.a.ssl.fastly.net/toner/${z}/${x}/${y}.png`,
-        attribution: 'Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.',
-        maxZoom: 20,
-    },
-    stamen_watercolor: {
-        url: (z, x, y) => `https://stamen-tiles.a.ssl.fastly.net/watercolor/${z}/${x}/${y}.jpg`,
-        attribution: 'Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.',
-        maxZoom: 16,
-    },
-    esri: {
-        url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
-        attribution: '© Esri, Maxar, Earthstar Geographics',
+    esri_topo: {
+        url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${y}/${x}`,
+        attribution: '© Esri, HERE, Garmin, OpenStreetMap contributors',
         maxZoom: 18,
     },
 };

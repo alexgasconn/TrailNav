@@ -5,14 +5,11 @@ import { registerTileProtocol, tileAttribution, tileMaxZoom, tileTemplate } from
 import { RoutePoint, RoutePointKind } from './routePoints';
 
 export const MAP_STYLE_LABELS: Record<MapStyleId, string> = {
-    topo: 'Topográfico',
-    satellite: 'Satélite',
-    carto: 'Carto (voyager)',
-    carto_voyager: 'Carto (voyager)',
-    stamen: 'Stamen (terrain) TBD',
-    stamen_toner: 'Stamen (toner) TBD',
-    stamen_watercolor: 'Stamen (watercolor) TBD',
-    esri: 'Esri (satélite)',
+    topo: 'Topográfico (OpenTopoMap)',
+    osm: 'Calles (OpenStreetMap)',
+    esri_topo: 'Topográfico (Esri)',
+    satellite: 'Satélite (Esri)',
+    carto: 'Claro (CARTO Voyager)',
 };
 
 export function buildMapStyle(style: MapStyleId, referenceOnly = false): StyleSpecification {
@@ -64,7 +61,7 @@ export function buildMapStyle(style: MapStyleId, referenceOnly = false): StyleSp
                 type: 'raster',
                 source: 'base',
                 layout: { visibility: referenceOnly ? 'none' : 'visible' },
-                paint: { 'raster-opacity': 1, 'raster-saturation': style === 'topo' ? -0.15 : 0 },
+                paint: { 'raster-opacity': 1 },
             },
         ],
     };
@@ -72,10 +69,46 @@ export function buildMapStyle(style: MapStyleId, referenceOnly = false): StyleSp
 
 export const ROUTE_SOURCE = 'trail-route';
 export const ROUTE_DONE_SOURCE = 'trail-route-done';
+export const ACTUAL_TRACK_SOURCE = 'trail-actual';
+const ARROW_IMAGE = 'route-arrow';
 
 export interface RouteLayerOptions {
     width?: number;
     showProgress?: boolean;
+    showActualTrack?: boolean;
+}
+
+function ensureArrowImage(map: maplibregl.Map) {
+    if (map.hasImage(ARROW_IMAGE)) return;
+    const size = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(10, 8);
+    ctx.lineTo(22, 16);
+    ctx.lineTo(10, 24);
+    ctx.strokeStyle = 'rgba(124,45,18,0.55)';
+    ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    map.addImage(ARROW_IMAGE, ctx.getImageData(0, 0, size, size));
+}
+
+export function setActualTrack(map: maplibregl.Map, coordinates: [number, number][]) {
+    const source = map.getSource(ACTUAL_TRACK_SOURCE) as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    source.setData(
+        coordinates.length >= 2
+            ? ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } } as any)
+            : ({ type: 'FeatureCollection', features: [] } as any)
+    );
 }
 
 export function addRouteLayers(map: maplibregl.Map, geoJson: any, options: RouteLayerOptions = {}) {
@@ -107,6 +140,21 @@ export function addRouteLayers(map: maplibregl.Map, geoJson: any, options: Route
         });
     }
 
+    if (options.showActualTrack) {
+        if (!map.getSource(ACTUAL_TRACK_SOURCE)) {
+            map.addSource(ACTUAL_TRACK_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        }
+        if (!map.getLayer('route-actual')) {
+            map.addLayer({
+                id: 'route-actual',
+                type: 'line',
+                source: ACTUAL_TRACK_SOURCE,
+                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                paint: { 'line-color': '#1d4ed8', 'line-width': 3.5, 'line-opacity': 0.9 },
+            });
+        }
+    }
+
     if (options.showProgress) {
         if (!map.getSource(ROUTE_DONE_SOURCE)) {
             map.addSource(ROUTE_DONE_SOURCE, {
@@ -123,6 +171,23 @@ export function addRouteLayers(map: maplibregl.Map, geoJson: any, options: Route
                 paint: { 'line-color': '#0f766e', 'line-width': width, 'line-opacity': 0.95 },
             });
         }
+    }
+
+    ensureArrowImage(map);
+    if (map.hasImage(ARROW_IMAGE) && !map.getLayer('route-arrows')) {
+        map.addLayer({
+            id: 'route-arrows',
+            type: 'symbol',
+            source: ROUTE_SOURCE,
+            layout: {
+                'symbol-placement': 'line',
+                'symbol-spacing': 90,
+                'icon-image': ARROW_IMAGE,
+                'icon-size': 0.6,
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+            },
+        });
     }
 }
 

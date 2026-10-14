@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Map as MapIcon, Navigation2, TrendingDown, TrendingUp } from 'lucide-react';
-import { Route } from '../lib/db';
+import { ArrowLeft, ArrowLeftRight, Car, Map as MapIcon, Navigation2, TrendingDown, TrendingUp } from 'lucide-react';
+import { Route, saveRoute } from '../lib/db';
+import { reverseRoute } from '../lib/reverseRoute';
 import { Screen } from '../App';
 import { TerrainSegment, analyzeRoute } from '../lib/routeAnalysis';
 import { getRouteProfile } from '../lib/routeProfile';
@@ -28,6 +29,17 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
     const [showPOI, setShowPOI] = useState(true);
     const [showSegs, setShowSegs] = useState(true);
 
+    const startPoint = profile.coordinates[0];
+    const directionsUrl = startPoint
+        ? `https://www.google.com/maps/dir/?api=1&destination=${startPoint[1]},${startPoint[0]}&travelmode=driving`
+        : null;
+
+    const handleReverse = async () => {
+        const reversed = reverseRoute(route);
+        await saveRoute(reversed);
+        onNavigate('analysis', reversed);
+    };
+
     return (
         <div className="flex flex-col min-h-full bg-canvas">
             <header className="pt-safe sticky top-0 z-10 bg-canvas/95 backdrop-blur border-b border-line">
@@ -40,6 +52,29 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
             </header>
 
             <div className="px-4 py-4 space-y-5">
+                <section className="grid grid-cols-2 gap-3">
+                    <button
+                        onClick={handleReverse}
+                        disabled={isActiveRoute}
+                        className="h-12 rounded-xl border border-line bg-surface text-ink text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                        title={isActiveRoute ? 'Finaliza la navegación para invertir la ruta' : undefined}
+                    >
+                        <ArrowLeftRight size={18} />
+                        {route.reversed ? 'Sentido original' : 'Invertir sentido'}
+                    </button>
+                    {directionsUrl && (
+                        <a
+                            href={directionsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-12 rounded-xl border border-line bg-surface text-ink text-sm font-semibold flex items-center justify-center gap-2"
+                        >
+                            <Car size={18} />
+                            Cómo llegar al inicio
+                        </a>
+                    )}
+                </section>
+
                 <section className="grid grid-cols-2 gap-3">
                     <StatCard label="Distancia" value={formatDistance(profile.totalDistance || route.distance)} />
                     <StatCard

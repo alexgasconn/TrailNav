@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
 import { Compass, Crosshair, Layers, Minus, Navigation2, Plus, Satellite, WifiOff, X } from 'lucide-react';
-import { MapStyleId, Route, getSettings, saveSettings } from '../lib/db';
+import { MAP_STYLE_IDS, MapStyleId, Route, getSettings, saveSettings } from '../lib/db';
 import { Screen } from '../App';
 import {
     MAP_STYLE_LABELS,
@@ -289,7 +289,7 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                     {showStylePicker && (
                         <div className="absolute top-16 right-16 bg-surface border border-line rounded-lg p-1.5 shadow-md w-48">
                             <button onClick={() => { setReferenceOnly(true); setShowStylePicker(false); }} className={`w-full text-left px-3 py-3 rounded-lg text-sm font-medium ${referenceOnly ? 'bg-moss-soft text-moss-strong' : 'text-ink-soft'}`}>Catalunya · incluida</button>
-                            {(['topo', 'satellite', 'carto'] as MapStyleId[]).map((style) => (
+                            {MAP_STYLE_IDS.map((style) => (
                                 <button
                                     key={style}
                                     onClick={() => changeStyle(style)}

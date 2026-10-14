@@ -17,6 +17,8 @@ type Props = {
     showSegments?: boolean;
     points?: RoutePoint[];
     analysis?: RouteAnalysis | null;
+    /** Etiquetas de km en el eje horizontal. */
+    showDistanceAxis?: boolean;
 };
 
 function slopeColor(pct: number, moderate: number, steep: number) {
@@ -37,6 +39,7 @@ export function ProfileChart({
     showSegments = true,
     points,
     analysis,
+    showDistanceAxis = true,
 }: Props) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -46,14 +49,15 @@ export function ProfileChart({
 
         const ratio = window.devicePixelRatio || 1;
         const width = canvas.clientWidth;
-        const h = height;
+        const axisHeight = showDistanceAxis ? 16 : 0;
+        const h = height - axisHeight;
         canvas.width = Math.max(1, Math.floor(width * ratio));
-        canvas.height = Math.max(1, Math.floor(h * ratio));
+        canvas.height = Math.max(1, Math.floor(height * ratio));
 
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
         ctx.scale(ratio, ratio);
-        ctx.clearRect(0, 0, width, h);
+        ctx.clearRect(0, 0, width, height);
 
         const range = Math.max(1, profile.maxElevation - profile.minElevation);
         const padding = 6;
@@ -209,7 +213,30 @@ export function ProfileChart({
                 if (label) ctx.fillText(label, x, Math.max(6, y - 6));
             }
         }
-    }, [profile, height, currentDistance, moderateThreshold, steepThreshold, showColoredFill, showPoints, showSegments, points, analysis]);
+
+        // eje horizontal en km
+        if (showDistanceAxis && profile.totalDistance > 0) {
+            const totalKm = profile.totalDistance / 1000;
+            const steps = [0.5, 1, 2, 5, 10, 20, 50, 100];
+            const maxTicks = Math.max(2, Math.floor(width / 45));
+            const step = steps.find((s) => totalKm / s <= maxTicks) ?? 100;
+            ctx.font = '10px Inter, system-ui, -apple-system, "Segoe UI", Roboto';
+            ctx.fillStyle = 'rgba(87,83,78,0.9)';
+            ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+            ctx.lineWidth = 1;
+            ctx.textBaseline = 'top';
+            for (let km = 0; km <= totalKm + 1e-6; km += step) {
+                const x = toX(km * 1000);
+                ctx.beginPath();
+                ctx.moveTo(x, h);
+                ctx.lineTo(x, h + 3);
+                ctx.stroke();
+                ctx.textAlign = km === 0 ? 'left' : x > width - 14 ? 'right' : 'center';
+                const label = Number.isInteger(km) ? `${km}` : km.toFixed(1);
+                ctx.fillText(km === 0 ? `${label} km` : label, x, h + 4);
+            }
+        }
+    }, [profile, height, currentDistance, moderateThreshold, steepThreshold, showColoredFill, showPoints, showSegments, points, analysis, showDistanceAxis]);
 
     return <canvas ref={canvasRef} className="w-full block" style={{ height: `${height}px` }} />;
 }
