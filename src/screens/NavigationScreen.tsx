@@ -25,7 +25,6 @@ import {
     formatDistance,
     formatElevation,
     formatPace,
-    formatPercent,
     formatSignedElevation,
     formatSpeed,
     formatTimeOfDay,
@@ -63,7 +62,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     const [confirmFinish, setConfirmFinish] = useState(false);
     const [slopeWindowMeters, setSlopeWindowMeters] = useState(200);
     const [showPanels, setShowPanels] = useState(true);
-    const [mapStyle, setMapStyle] = useState<MapStyleId>('topo');
+    const [mapStyle, setMapStyle] = useState<MapStyleId>('osm');
     const [showMapMenu, setShowMapMenu] = useState(false);
     const mapMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -625,8 +624,6 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
             items: [
                 { label: 'Recorrido', value: formatDistance(metrics.actualDistance), tone: 'accent' as const },
                 { label: 'Restante', value: formatDistance(metrics.distanceRemaining) },
-                { label: 'Completado', value: formatPercent(metrics.progress * 100) },
-                { label: 'Altitud', value: metrics.altitude != null ? formatElevation(metrics.altitude) : '—' },
                 {
                     label: 'D+',
                     value: metrics.actualAscent != null ? formatSignedElevation(metrics.actualAscent) : '—',

@@ -76,7 +76,7 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
         getSettings().then((settings) => {
             setMapStyle(settings.mapStyle);
             setKeepAwake(settings.screenAlwaysOn);
-        }).catch(() => setMapStyle('topo'));
+        }).catch(() => setMapStyle('osm'));
     }, []);
 
     useEffect(() => {

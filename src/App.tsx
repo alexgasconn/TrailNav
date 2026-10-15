@@ -10,7 +10,7 @@ import { OfflineMapManagerScreen } from './screens/OfflineMapManagerScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { Route, getSettings } from './lib/db';
 import { registerTileProtocol } from './lib/offlineTiles';
-import { formatClock, formatPercent } from './lib/format';
+import { formatClock } from './lib/format';
 import { NavigationSessionProvider, useNavigationSession } from './state/navigationSession';
 
 export type Screen = 'home' | 'import' | 'analysis' | 'map' | 'free' | 'navigation' | 'offline' | 'settings';
@@ -127,7 +127,6 @@ function Shell() {
           </span>
           <span className="text-right">
             <span className="block text-sm font-semibold tabular">{formatClock(session.metrics?.movingSeconds ?? 0)}</span>
-            <span className="block text-[11px] text-white/75 tabular">{formatPercent((session.metrics?.progress ?? 0) * 100)}</span>
           </span>
         </button>
       )}

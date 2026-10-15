@@ -29,6 +29,9 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
     const [showFill, setShowFill] = useState(true);
     const [showPOI, setShowPOI] = useState(true);
     const [showSegs, setShowSegs] = useState(true);
+    const [confirmReverse, setConfirmReverse] = useState(false);
+    const [reversing, setReversing] = useState(false);
+    const [reverseError, setReverseError] = useState<string | null>(null);
 
     const startPoint = profile.coordinates[0];
     const directionsUrl = startPoint
@@ -36,9 +39,20 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
         : null;
 
     const handleReverse = async () => {
-        const reversed = reverseRoute(route);
-        await saveRoute(reversed);
-        onNavigate('analysis', reversed);
+        if (reversing) return;
+        setReversing(true);
+        setReverseError(null);
+        try {
+            const reversed = reverseRoute(route);
+            await saveRoute(reversed);
+            if (isActiveRoute) session.stopSession();
+            setConfirmReverse(false);
+            onNavigate('analysis', reversed);
+        } catch {
+            setReverseError('No se pudo invertir la ruta. Inténtalo de nuevo.');
+        } finally {
+            setReversing(false);
+        }
     };
 
     return (
@@ -55,13 +69,13 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
             <div className="px-4 py-4 space-y-5">
                 <section className="grid grid-cols-2 gap-3">
                     <button
-                        onClick={handleReverse}
-                        disabled={isActiveRoute}
+                        onClick={() => isActiveRoute ? setConfirmReverse(true) : void handleReverse()}
+                        disabled={reversing}
                         className="h-12 rounded-xl border border-line bg-surface text-ink text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                        title={isActiveRoute ? 'Finaliza la navegación para invertir la ruta' : undefined}
+                        title="Invertir el sentido de la ruta"
                     >
                         <ArrowLeftRight size={18} />
-                        {route.reversed ? 'Sentido original' : 'Invertir sentido'}
+                        {reversing ? 'Invirtiendo...' : route.reversed ? 'Sentido original' : 'Invertir sentido'}
                     </button>
                     {directionsUrl && (
                         <a
@@ -76,6 +90,7 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
                     )}
                 </section>
 
+                {reverseError && <p role="alert" className="text-sm text-alert">{reverseError}</p>}
                 <section className="grid grid-cols-2 gap-3">
                     <StatCard label="Distancia" value={formatDistance(profile.totalDistance || route.distance)} />
                     <StatCard
@@ -182,6 +197,20 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
 
                 <RouteWeatherPanel route={route} etaMinutes={eta.minutes} />
             </div>
+
+            {confirmReverse && (
+                <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4">
+                    <div role="dialog" aria-modal="true" aria-labelledby="reverse-title" className="w-full max-w-sm bg-surface border border-line rounded-lg p-5">
+                        <h2 id="reverse-title" className="text-base font-semibold">¿Finalizar e invertir la ruta?</h2>
+                        <p className="text-sm text-ink-soft mt-3">La navegación actual finalizará. La próxima navegación comenzará desde el extremo contrario.</p>
+                        {reverseError && <p role="alert" className="text-sm text-alert mt-3">{reverseError}</p>}
+                        <div className="flex flex-wrap gap-2 mt-5">
+                            <button onClick={() => setConfirmReverse(false)} disabled={reversing} className="flex-1 min-h-12 px-3 rounded-lg border border-line disabled:opacity-50">Cancelar</button>
+                            <button onClick={handleReverse} disabled={reversing} className="flex-1 min-h-12 px-3 rounded-lg bg-moss text-white disabled:opacity-50">{reversing ? 'Invirtiendo...' : 'Finalizar e invertir'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="sticky bottom-0 mt-auto bg-surface border-t border-line px-4 py-3 flex gap-2">
                 <button

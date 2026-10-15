@@ -46,7 +46,7 @@ function slopeColor(pct: number, _moderate?: number, _steep?: number) {
     return `rgb(${GRADE_STOPS[0][1].join(',')})`;
 }
 
-const SMOOTH_HALF_WINDOW = 40; // metros a cada lado
+const SMOOTH_HALF_WINDOW = 45; // metros a cada lado
 
 /** Media móvil por distancia y pendiente (%) sobre la elevación suavizada. */
 function smoothProfile(profile: RouteProfile) {

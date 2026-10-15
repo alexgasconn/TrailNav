@@ -19,11 +19,11 @@ export type MapStyleId = 'topo' | 'osm' | 'satellite' | 'carto' | 'esri_topo';
 
 export const MAP_STYLE_IDS: MapStyleId[] = ['topo', 'osm', 'esri_topo', 'satellite', 'carto'];
 
-/** Ajustes guardados con estilos retirados (Stamen, duplicados de Carto/Esri) vuelven al topográfico. */
+/** Ajustes guardados con estilos retirados vuelven al mapa de calles. */
 function normalizeStyle(style: unknown): MapStyleId {
   if (style === 'carto_voyager') return 'carto';
   if (style === 'esri') return 'satellite';
-  return MAP_STYLE_IDS.includes(style as MapStyleId) ? (style as MapStyleId) : 'topo';
+  return MAP_STYLE_IDS.includes(style as MapStyleId) ? (style as MapStyleId) : 'osm';
 }
 
 export interface MapRegion {
@@ -56,6 +56,7 @@ export interface Settings {
   deviationWarningDistance: number;
   keepMapNorthUp: boolean;
   mapStyle: MapStyleId;
+  mapStyleDefaultVersion?: number;
   screenAlwaysOn: boolean;
   vibrationAlerts: boolean;
   /** Perfil para estimar tiempos de ruta. */
@@ -69,7 +70,8 @@ export const DEFAULT_SETTINGS: Settings = {
   id: 'user-settings',
   deviationWarningDistance: 30,
   keepMapNorthUp: false,
-  mapStyle: 'topo',
+  mapStyle: 'osm',
+  mapStyleDefaultVersion: 1,
   screenAlwaysOn: true,
   vibrationAlerts: true,
   fitness: 'average',
@@ -132,7 +134,10 @@ export async function getSettings(): Promise<Settings> {
   const db = await getDB();
   const stored = await db.get('settings', DEFAULT_SETTINGS.id);
   if (stored) {
-    return { ...DEFAULT_SETTINGS, ...stored, id: DEFAULT_SETTINGS.id, mapStyle: normalizeStyle(stored.mapStyle) };
+    const mapStyle = !stored.mapStyleDefaultVersion && stored.mapStyle === 'topo' ? 'osm' : normalizeStyle(stored.mapStyle);
+    const settings: Settings = { ...DEFAULT_SETTINGS, ...stored, id: DEFAULT_SETTINGS.id, mapStyle, mapStyleDefaultVersion: 1 };
+    if (!stored.mapStyleDefaultVersion) await db.put('settings', settings);
+    return settings;
   }
   await db.put('settings', DEFAULT_SETTINGS);
   return DEFAULT_SETTINGS;

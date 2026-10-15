@@ -125,7 +125,7 @@ export async function getRouteWeather(
 ): Promise<RouteWeatherTimeline> {
     const start = Math.round(startTimestamp / HOUR) * HOUR;
     const duration = Math.max(1, etaMinutes) * 60_000;
-    const cacheId = `${route.id}:${Math.round(etaMinutes)}:${start}`;
+    const cacheId = `${route.id}:${route.reversed ? 'reverse' : 'forward'}:${Math.round(etaMinutes)}:${start}`;
 
     const cached = readCache(cacheId);
     if (!forceRefresh && cached && Date.now() - cached.updatedAt < CACHE_DURATION) {

@@ -12,8 +12,6 @@ import {
 } from '../lib/routeWeather';
 import { formatDate, formatDuration, formatInteger, formatTimeOfDay } from '../lib/format';
 
-const COLORS = ['#b91c1c', '#c2410c', '#a16207', '#15803d', '#1d4ed8'];
-
 function pad(value: number) {
     return String(value).padStart(2, '0');
 }
@@ -30,7 +28,16 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
     const [error, setError] = useState<string | null>(null);
     const [reloadKey, setReloadKey] = useState(0);
     const forceRef = useRef(false);
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const chartRef = useRef<HTMLDivElement | null>(null);
+    const [chartContainerWidth, setChartContainerWidth] = useState(320);
+
+    useEffect(() => {
+        const container = chartRef.current;
+        if (!container) return;
+        const observer = new ResizeObserver(() => setChartContainerWidth(container.clientWidth));
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, [timeline]);
 
     useEffect(() => {
         let cancelled = false;
@@ -53,7 +60,7 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
         return () => {
             cancelled = true;
         };
-    }, [route.id, etaMinutes, start, reloadKey]);
+    }, [route, etaMinutes, start, reloadKey]);
 
     const changeStart = (value: string) => {
         const timestamp = new Date(value).getTime();
@@ -70,69 +77,16 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
         setReloadKey((value) => value + 1);
     };
 
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas || !timeline) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const width = canvas.clientWidth;
-        const height = 150;
-        const ratio = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(width * ratio);
-        canvas.height = Math.floor(height * ratio);
-        ctx.scale(ratio, ratio);
-        ctx.clearRect(0, 0, width, height);
-
-        const t0 = timeline.startTimestamp;
-        const t1 = Math.max(timeline.endTimestamp, t0 + 3_600_000);
-        const all = timeline.samples.flatMap((s) => s.hourly.temperature);
-        const tmin = Math.floor(Math.min(...all));
-        const tmax = Math.ceil(Math.max(...all));
-        const left = 30;
-        const bottom = 20;
-        const top = 8;
-        const plotW = width - left - 8;
-        const plotH = height - bottom - top;
-        const toX = (t: number) => left + ((t - t0) / (t1 - t0)) * plotW;
-        const toY = (v: number) => top + (1 - (v - tmin) / Math.max(1, tmax - tmin)) * plotH;
-
-        // Probabilidad de lluvia máxima entre puntos, como barras de fondo.
-        const first = timeline.samples[0].hourly;
-        const barW = Math.max(3, plotW / Math.max(1, first.time.length) - 3);
-        first.time.forEach((t, i) => {
-            const p = Math.max(...timeline.samples.map((s) => s.hourly.precipitationProbability[i] ?? 0));
-            const h = (p / 100) * plotH;
-            ctx.fillStyle = 'rgba(59,130,246,0.22)';
-            ctx.fillRect(toX(t) - barW / 2, top + plotH - h, barW, h);
-        });
-
-        timeline.samples.forEach((sample, si) => {
-            ctx.beginPath();
-            sample.hourly.time.forEach((t, i) => {
-                const x = toX(t);
-                const y = toY(sample.hourly.temperature[i]);
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.strokeStyle = COLORS[si % COLORS.length];
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        });
-
-        ctx.fillStyle = 'rgba(87,83,78,0.9)';
-        ctx.font = '10px system-ui, -apple-system, Segoe UI, Roboto';
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'right';
-        ctx.fillText(`${tmax}°`, left - 4, toY(tmax));
-        ctx.fillText(`${tmin}°`, left - 4, toY(tmin));
-        ctx.textBaseline = 'top';
-        ctx.textAlign = 'left';
-        ctx.fillText(formatTimeOfDay(t0), left, height - bottom + 5);
-        ctx.textAlign = 'right';
-        ctx.fillText(formatTimeOfDay(t1), width - 8, height - bottom + 5);
-    }, [timeline]);
-
+    const hours = (timeline?.samples[0]?.hourly.time ?? []).map((time, index) => ({
+        time,
+        temperature: timeline!.samples.reduce((sum, sample) => sum + sample.hourly.temperature[index], 0) / timeline!.samples.length,
+        rain: Math.max(...timeline!.samples.map((sample) => sample.hourly.precipitationProbability[index] ?? 0)),
+    }));
+    const chartWidth = Math.max(320, chartContainerWidth, hours.length * 64 + 80);
+    const minimum = Math.floor(Math.min(...hours.map((hour) => hour.temperature), 0) / 5) * 5;
+    const maximum = Math.max(minimum + 5, Math.ceil(Math.max(...hours.map((hour) => hour.temperature), 5) / 5) * 5);
+    const hourX = (index: number) => 44 + ((index + 0.5) / Math.max(1, hours.length)) * (chartWidth - 88);
+    const temperatureY = (value: number) => 32 + (1 - (value - minimum) / (maximum - minimum)) * 144;
     const minInput = toLocalInput(defaultStartTimestamp() - 3_600_000);
     const maxInput = toLocalInput(maxStartTimestamp());
     const end = start + etaMinutes * 60_000;
@@ -188,16 +142,45 @@ export function RouteWeatherPanel({ route, etaMinutes }: { route: Route; etaMinu
 
             {timeline && (
                 <>
-                    <canvas ref={canvasRef} className="w-full rounded-xl bg-canvas mb-3" style={{ height: 150 }} />
+                    <div ref={chartRef} className="overflow-x-auto bg-canvas rounded-lg mb-3" tabIndex={0} role="region" aria-label="Previsión meteorológica por horas">
+                        <svg width={chartWidth} height={230} className="block max-w-none" role="img" aria-label="Temperatura media en grados Celsius y probabilidad máxima de lluvia en porcentaje por hora">
+                            <text x={12} y={18} fontSize={11} fill="#b45309">°C</text>
+                            <text x={chartWidth - 12} y={18} textAnchor="end" fontSize={11} fill="#2563eb">%</text>
+                            {[0, 1, 2, 3, 4].map((tick) => {
+                                const y = 32 + tick * 36;
+                                return (
+                                    <g key={tick} fontSize={10} fill="currentColor" className="text-ink-faint">
+                                        <line x1={44} x2={chartWidth - 44} y1={y} y2={y} stroke="currentColor" opacity={0.15} />
+                                        <text x={36} y={y + 4} textAnchor="end">{formatInteger(maximum - tick * (maximum - minimum) / 4)}</text>
+                                        <text x={chartWidth - 36} y={y + 4}>{100 - tick * 25}</text>
+                                    </g>
+                                );
+                            })}
+                            {hours.map((hour, index) => (
+                                <g key={hour.time} fontSize={10} textAnchor="middle">
+                                    <rect x={hourX(index) - 12} y={176 - hour.rain / 100 * 144} width={24} height={hour.rain / 100 * 144} fill="#3b82f6" opacity={0.4} rx={2}>
+                                        <title>{formatDate(hour.time)} {formatTimeOfDay(hour.time)}: {formatInteger(hour.rain)} %</title>
+                                    </rect>
+                                    <text x={hourX(index)} y={193} fill="#2563eb">{formatInteger(hour.rain)} %</text>
+                                    <text x={hourX(index)} y={211} fill="currentColor">{formatTimeOfDay(hour.time)}</text>
+                                    {(index === 0 || new Date(hour.time).getDate() !== new Date(hours[index - 1].time).getDate()) && (
+                                        <text x={hourX(index)} y={225} fontSize={9} fill="currentColor">{formatDate(hour.time)}</text>
+                                    )}
+                                </g>
+                            ))}
+                            <polyline points={hours.map((hour, index) => `${hourX(index)},${temperatureY(hour.temperature)}`).join(' ')} fill="none" stroke="#b45309" strokeWidth={2.5} strokeLinejoin="round" />
+                            {hours.map((hour, index) => (
+                                <g key={hour.time}>
+                                    <circle cx={hourX(index)} cy={temperatureY(hour.temperature)} r={3} fill="#b45309" />
+                                    <text x={hourX(index)} y={temperatureY(hour.temperature) - 10} textAnchor="middle" fontSize={11} fill="#b45309">{formatInteger(hour.temperature)}°</text>
+                                </g>
+                            ))}
+                        </svg>
+                    </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[11px] text-ink-soft">
-                        {timeline.samples.map((s, i) => (
-                            <span key={s.label} className="flex items-center gap-1">
-                                <span className="inline-block w-3 h-0.5" style={{ background: COLORS[i % COLORS.length] }} />
-                                {s.label}
-                            </span>
-                        ))}
+                        <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-amber-700" /> Temperatura media (°C)</span>
                         <span className="flex items-center gap-1">
-                            <span className="inline-block w-3 h-2 bg-blue-500/30" /> Prob. lluvia
+                            <span className="inline-block w-3 h-2 bg-blue-500/40" /> Prob. máxima de lluvia (%)
                         </span>
                     </div>
 
