@@ -31,7 +31,7 @@ const GRADE_STOPS: [number, [number, number, number]][] = [
 ];
 
 /** Color continuo según la pendiente absoluta (%). */
-function slopeColor(pct: number, _moderate?: number, _steep?: number) {
+export function slopeColor(pct: number, _moderate?: number, _steep?: number) {
     const abs = Math.abs(pct);
     const last = GRADE_STOPS[GRADE_STOPS.length - 1];
     if (abs >= last[0]) return `rgb(${last[1].join(',')})`;

@@ -20,6 +20,7 @@ import {
     MAP_STYLE_LABELS,
 } from '../lib/mapStyles';
 import { MetricPanels } from '../components/MetricPanels';
+import { CurrentRampPanel } from '../components/CurrentRampPanel';
 import {
     formatClock,
     formatDistance,
@@ -657,7 +658,11 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
     // append info windows (profile, weather, slope) as panels with content
     const info = buildInfoWindows(profile, route, metrics, windowMeters, setWindowMeters).map((w) => ({ id: w.id, title: w.title, content: w.content }));
 
-    return [...base, ...info];
+    return [...base, {
+        id: 'current-ramp',
+        title: 'Rampa actual',
+        content: <CurrentRampPanel route={route} profile={profile} distance={metrics.distanceDone} hasPosition={metrics.distanceFromRoute != null} offRoute={metrics.offRoute} />,
+    }, ...info];
 }
 
 function buildInfoWindows(
@@ -702,7 +707,7 @@ function buildInfoWindows(
             </div>
         );
 
-        windows.push({ id: 'slope', title: '', content });
+        windows.push({ id: 'slope', title: 'Perfil de ruta', content });
     }
 
     return windows;

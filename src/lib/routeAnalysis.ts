@@ -37,6 +37,35 @@ const MIN_ELEVATION_CHANGE = 25;
 const SLOPE_THRESHOLD = 1;
 const SMOOTHING_RADIUS = 2;
 
+export function getCurrentRamp(analysis: RouteAnalysis, distance: number) {
+    const points = analysis.points;
+    if (points.length < 2) return null;
+    const direction = (slope: number) => slope > 0.5 ? 'ascent' : slope < -0.5 ? 'descent' : 'flat';
+    let low = 1;
+    let high = points.length - 1;
+    while (low < high) {
+        const middle = (low + high) >> 1;
+        if (points[middle].distance <= distance) low = middle + 1;
+        else high = middle;
+    }
+    const index = low;
+    const trend = direction(points[index].slope);
+    let startIndex = index;
+    let endIndex = index;
+    while (startIndex > 1 && direction(points[startIndex - 1].slope) === trend) startIndex -= 1;
+    while (endIndex < points.length - 1 && direction(points[endIndex + 1].slope) === trend) endIndex += 1;
+    const start = points[startIndex - 1];
+    const end = points[endIndex];
+    const length = end.distance - start.distance;
+    return {
+        trend,
+        startDistance: start.distance,
+        endDistance: end.distance,
+        length,
+        averageSlope: length > 0 ? (end.elevation - start.elevation) / length * 100 : 0,
+    };
+}
+
 function smoothElevations(elevations: number[]): number[] {
     return elevations.map((_, index) => {
         const start = Math.max(0, index - SMOOTHING_RADIUS);
