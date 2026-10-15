@@ -39,13 +39,16 @@ export interface MetricPanel {
  * Paneles de métricas deslizables: se usa scroll con ajuste por página para que
  * el gesto horizontal sea el nativo del sistema.
  */
-export class MetricPanels extends React.Component<{ panels: MetricPanel[] }, { activeIndex: number }> {
-    containerRef: React.RefObject<HTMLDivElement>;
+type MetricPanelsProps = { panels: MetricPanel[]; onDismiss?: () => void };
 
-    constructor(props: { panels: MetricPanel[] }) {
+export class MetricPanels extends React.Component<MetricPanelsProps, { activeIndex: number; dragOffset: number }> {
+    containerRef: React.RefObject<HTMLDivElement>;
+    touchStart: { x: number; y: number } | null = null;
+
+    constructor(props: MetricPanelsProps) {
         super(props);
         this.containerRef = React.createRef<HTMLDivElement>();
-        this.state = { activeIndex: 0 };
+        this.state = { activeIndex: 0, dragOffset: 0 };
         this.handleScroll = this.handleScroll.bind(this);
         this.goTo = this.goTo.bind(this);
     }
@@ -64,12 +67,62 @@ export class MetricPanels extends React.Component<{ panels: MetricPanel[] }, { a
         container.scrollTo({ left: index * container.clientWidth, behavior: 'smooth' });
     }
 
+    handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+        this.touchStart = null;
+        if (!this.props.onDismiss || event.touches.length !== 1) return;
+        if ((event.target as Element).closest('button, a, input, select, textarea, [role="slider"]')) return;
+        const touch = event.touches[0];
+        this.touchStart = { x: touch.clientX, y: touch.clientY };
+    };
+
+    handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+        if (!this.touchStart) return;
+        if (event.touches.length !== 1) {
+            this.cancelTouch();
+            return;
+        }
+        const deltaX = event.touches[0].clientX - this.touchStart.x;
+        const deltaY = event.touches[0].clientY - this.touchStart.y;
+        if ((Math.abs(deltaX) > 12 && Math.abs(deltaX) > Math.abs(deltaY)) || deltaY < -12) {
+            this.cancelTouch();
+            return;
+        }
+        this.setState({ dragOffset: Math.min(160, Math.max(0, deltaY)) });
+    };
+
+    handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+        const start = this.touchStart;
+        const touch = event.changedTouches[0];
+        this.cancelTouch();
+        if (!start || !touch) return;
+        const deltaX = touch.clientX - start.x;
+        const deltaY = touch.clientY - start.y;
+        if (deltaY >= 56 && deltaY > Math.abs(deltaX) * 1.5) this.props.onDismiss?.();
+    };
+
+    cancelTouch = () => {
+        this.touchStart = null;
+        this.setState({ dragOffset: 0 });
+    };
+
     render() {
         const panels = this.props.panels;
         if (panels.length === 0) return null;
 
         return (
-            <div>
+            <div
+                onTouchStart={this.handleTouchStart}
+                onTouchMove={this.handleTouchMove}
+                onTouchEnd={this.handleTouchEnd}
+                onTouchCancel={this.cancelTouch}
+                style={{
+                    touchAction: 'pan-x',
+                    transform: `translateY(${this.state.dragOffset}px)`,
+                    opacity: Math.max(0.35, 1 - this.state.dragOffset / 240),
+                    transition: this.state.dragOffset > 0 ? 'none' : 'transform 150ms ease, opacity 150ms ease',
+                }}
+            >
+                {this.props.onDismiss && <div aria-hidden="true" className="w-10 h-1 rounded-full bg-line-strong mx-auto mb-2" />}
                 <div
                     ref={this.containerRef}
                     onScroll={this.handleScroll}

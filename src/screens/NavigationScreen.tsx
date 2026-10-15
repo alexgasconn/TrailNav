@@ -562,7 +562,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 <div className="bg-surface-soft/95 backdrop-blur border-t border-line pt-3 pb-3">
                     {showPanels && (
                         <div className="px-4 pb-2" style={{ maxHeight: 260 }}>
-                            <MetricPanels panels={panels} />
+                            <MetricPanels panels={panels} onDismiss={() => setShowPanels(false)} />
                         </div>
                     )}
 
