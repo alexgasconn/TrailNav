@@ -6,6 +6,10 @@ import { duplicateRoute, editRouteCopy } from '../src/lib/routeTools';
 import { reverseRoute } from '../src/lib/reverseRoute';
 import { getRoutePoints } from '../src/lib/routePoints';
 import { toUTM } from '../src/lib/coordinates';
+import { addTrackPoint, createActualTrack, replayTrack } from '../src/lib/actualTrack';
+import 'fake-indexeddb/auto';
+import { IDBFactory } from 'fake-indexeddb';
+import { getDB, saveRoute, getRoute, getRoutes, deleteRoute, getSettings, saveSettings } from '../src/lib/db';
 
 const coordinates = Array.from({ length: 101 }, (_, index) => [2 + index * 0.0001, 41, 100 + index]);
 const geojson = {
@@ -76,4 +80,55 @@ test('UTM valida zona, hemisferio y límites geográficos', () => {
     assert.ok(toUTM(180, 0)?.startsWith('60 N'));
     assert.equal(toUTM(0, 90), null);
     assert.equal(toUTM(NaN, 40), null);
+});
+
+test('las posiciones GPS inválidas no contaminan las métricas del recorrido', () => {
+    const track = createActualTrack();
+    assert.equal(addTrackPoint(track, 2, 41, 100, 10), true);
+    const snapshot = structuredClone(track);
+    for (const [lng, lat, accuracy] of [[NaN, 41, 10], [181, 41, 10], [2, 91, 10], [2, Infinity, 10], [2, 41, NaN], [2, 41, -1], [2, 41, 100]]) {
+        assert.equal(addTrackPoint(track, lng, lat, 100, accuracy), false);
+    }
+    assert.deepEqual(track, snapshot);
+});
+
+test('recupera los puntos válidos de un recorrido parcialmente corrupto', () => {
+    assert.deepEqual(replayTrack(null), createActualTrack());
+    assert.deepEqual(replayTrack({ points: [] }), createActualTrack());
+    const recovered = replayTrack([null, {}, [], ['2', 41], [2, 41, null], [Infinity, 41], [2.001, 41, 110]]);
+    assert.equal(recovered.points.length, 2);
+    assert.ok(recovered.distance > 80 && recovered.distance < 90);
+    assert.ok(Number.isFinite(recovered.ascent));
+});
+
+test('la base de datos reintenta tras un fallo de apertura y conserva rutas y ajustes', async () => {
+    const originalOpen = indexedDB.open;
+    indexedDB.open = () => { throw new Error('Almacenamiento temporalmente no disponible'); };
+    try {
+        await assert.rejects(async () => getDB(), /temporalmente/);
+    } finally {
+        indexedDB.open = originalOpen;
+    }
+
+    const database = await getDB();
+    assert.equal(await getDB(), database);
+    const original = routeFromGeoJSON(geojson, 'Persistencia');
+    await saveRoute(original);
+    assert.deepEqual(await getRoute(original.id), original);
+    assert.equal((await getRoutes()).length, 1);
+    const settings = await getSettings();
+    await saveSettings({ ...settings, soundAlerts: true });
+    assert.equal((await getSettings()).soundAlerts, true);
+    await deleteRoute(original.id);
+    assert.equal(await getRoute(original.id), undefined);
+    assert.equal((await getRoutes()).length, 0);
+
+    const upgraded = indexedDB.open('trailnav-db', 3);
+    await new Promise<void>((resolve, reject) => {
+        upgraded.onsuccess = () => { upgraded.result.close(); resolve(); };
+        upgraded.onerror = () => reject(upgraded.error);
+    });
+    await assert.rejects(getDB(), { name: 'VersionError' });
+    globalThis.indexedDB = new IDBFactory();
+    assert.ok(await getDB());
 });

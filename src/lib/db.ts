@@ -143,6 +143,17 @@ export function getDB() {
           db.createObjectStore('settings', { keyPath: 'id' });
         }
       },
+      blocking() {
+        const connection = dbPromise;
+        dbPromise = null;
+        void connection?.then((db) => db.close()).catch(() => undefined);
+      },
+      terminated() {
+        dbPromise = null;
+      },
+    }).catch((error: unknown) => {
+      dbPromise = null;
+      throw error;
     });
   }
   return dbPromise;

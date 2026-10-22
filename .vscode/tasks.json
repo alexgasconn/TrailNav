@@ -61,6 +61,13 @@
 			"command": "& 'C:\\Program Files\\nodejs\\npm.cmd' run preview -- --host 127.0.0.1 --port 4180",
 			"isBackground": true,
 			"problemMatcher": []
+		},
+		{
+			"label": "TrailNav: check",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\nodejs\\npm.cmd' run check",
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

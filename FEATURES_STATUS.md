@@ -6,6 +6,8 @@ Este archivo es la fuente de verdad del progreso. Una feature solo pasa a **Comp
 
 Estados: **Completada**, **En progreso**, **Pendiente**.
 
+Arranque y uso: [README.md](README.md). Arquitectura, contratos y contribucion: [CONTRIBUTING.md](CONTRIBUTING.md). Este documento describe capacidades y pendientes, no certifica seguridad ni sustituye pruebas en dispositivo real.
+
 ## Experiencia movil: ampliacion de octubre
 
 OpenStreetMap es la opcion predeterminada. Catalunya queda como mapa de referencia opcional, no como sustituto del mapa detallado.
@@ -48,11 +50,11 @@ OpenStreetMap es la opcion predeterminada. Catalunya queda como mapa de referenc
 | Edicion con snap-to-trail | Pendiente de motor de rutas/red de caminos, no se simula un ajuste inexistente |
 | Fotos georreferenciadas | Pendiente de captura, almacenamiento y gestion de fotos |
 
-Comprobaciones: TypeScript, compilacion PWA y seis pruebas en `scripts/mobile-features.test.ts`. Navegador con GPS simulado: importacion, arrastre del perfil, SOS, exportacion grabada, auto-pausa/reanudacion y recepcion de archivo compartido. Las pruebas del navegador no certifican sensores ni bateria Android.
+Comprobaciones de mantenimiento (2026-10-22): TypeScript, compilacion PWA y nueve pruebas en [scripts/mobile-features.test.ts](scripts/mobile-features.test.ts), incluidas persistencia/reconexion de IndexedDB, posiciones GPS invalidas y recuperacion parcial de trazas. Ejecutar `npm run check`. Pruebas de navegador de la ampliacion anterior con GPS simulado: importacion, arrastre del perfil, SOS, exportacion grabada, auto-pausa/reanudacion y recepcion de archivo compartido; no se han repetido todas en esta revision. Las pruebas del navegador no certifican sensores ni bateria Android.
 
 Limitaciones de plataforma: HTTPS o localhost para APIs sensibles; PWA instalada para integracion con el SO; audio activado mediante gesto del usuario; voz offline dependiente de las voces instaladas. El almacenamiento web puede ser eliminado por el SO/navegador. No se ha añadido un servidor de localizacion.
 
-Dependencias: npm informa de 19 vulnerabilidades (incluida una critica) en el arbol instalado. Pendiente de auditoria separada, sin aplicar actualizaciones masivas incompatibles.
+Dependencias: tras retirar paquetes sin uso y actualizar versiones compatibles, `npm audit` informa de dos vulnerabilidades (una baja de esbuild y una critica de MapLibre). La correccion propuesta para MapLibre exige una version mayor; migracion y validacion del mapa pendientes. No se han aplicado actualizaciones forzadas incompatibles.
 
 ## Analisis de rutas
 
@@ -107,11 +109,13 @@ Dependencias: npm informa de 19 vulnerabilidades (incluida una critica) en el ar
 | Offline-first | Service worker de la PWA | En progreso | Configurado, falta prueba de instalacion |
 | Android | Wake lock, vibracion, bateria | En progreso | APIs disponibles con soporte del navegador |
 | Calidad | TypeScript sin errores | Completada | Comprobacion tsc --noEmit; tipos React instalados |
-| Calidad | Pruebas automatizadas de motores | En progreso | Seis pruebas de importacion, exportacion, edicion y UTM; falta ampliar ETA/map matching |
+| Calidad | Pruebas automatizadas de motores | En progreso | Nueve pruebas de importacion, exportacion, edicion, UTM, GPS y almacenamiento; falta ampliar ETA/map matching |
 | UX | Navegacion centrada en rutas | Completada | Tabs Rutas, Mapas y Ajustes; importar es una accion contextual |
 | UX | Centro de preparacion de ruta | Completada | Accesos a mapa, analisis, meteo y navegacion desde la ruta |
 
 ## Siguiente bloque recomendado
+
+Prioridad de mantenimiento: resolver la vulnerabilidad critica de MapLibre con migracion validada y revisar el aviso restante de esbuild.
 
 1. Certificar sensores, comparticion de archivos y autonomia en Android real.
 2. Completar desvio con cooldown e histéresis configurable.

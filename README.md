@@ -1,443 +1,52 @@
-<div align="center">
+# TrailNav
 
-# 🥾 TrailNav - Offline Trail Navigation
+Aplicacion web instalable (PWA) de navegacion para senderismo y trail. Importa rutas GPX, KML y GeoJSON, prepara el recorrido y sigue la posicion GPS con cartografia descargada. No necesita cuenta ni servidor propio.
 
-![Version](https://img.shields.io/badge/version-2.0.0-emerald)
-![License](https://img.shields.io/badge/license-MIT-blue)
-![Status](https://img.shields.io/badge/status-Production-success)
+## Empezar
 
-**A Progressive Web App for offline hiking, trail running, and MTB route navigation with GPX support**
+Recomendado: Node.js 22 LTS y npm. Ejecutar desde la raiz del repositorio:
 
-[Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Improvements](#-android-optimizations) • [Development](#-development)
-
-</div>
-
-<!-- Last updated: 2026-09-04 -->
-
-## Bundled Catalunya Map and Free Navigation
-
-- The Map screen and the "Leave without a route" shortcut provide GPS tracking without a GPX: speed, altitude, accuracy, zoom and heading-based orientation.
-- Dragging the map pauses camera following; the center button resumes it. The screen stays on when the device, the permission and the setting allow it.
-- `public/maps/catalunya.json` contains real public-domain Natural Earth cartography (<https://www.naturalearthdata.com/about/terms-of-use/>). It is automatically included in the PWA install cache, with no manual regional downloads.
-- It is a 1:10M reference map: provinces, five towns, rivers and main roads. It does NOT contain trails, local streets, relief or contour lines, and it is not a substitute for detailed cartography for mountain safety. There is no bundled base coverage outside the region.
-- Detailed raster maps remain optional. Only saved regions have offline detail; GPS does not need internet, but the first open and installation do. The browser may delete storage if its data is cleared.
-- To regenerate the bundled data: `node scripts/build-catalunya.mjs`. Tiles are not bulk-downloaded to build this base.
-- To test installation and offline startup: `npm run build` and `npm run preview`. The service worker is disabled in development to avoid stale versions during testing.
-
----
-
-## 🎯 Features
-
-### Core Features
-
-- 📍 **Offline GPS Navigation** - Navigate with confidence anywhere, even without internet
-- 🗺️ **GPS Route Tracking** - Real-time position tracking on detailed maps
-- 📊 **Route Analysis** - Detailed elevation, distance, and time statistics
-- 🏔️ **Elevation Profiles** - Visualize gains and terrain difficulty
-  - Colored fill by slope grade per segment, POI markers on the profile and toggles to show/hide elements
-  - Horizontal axis in km (also during navigation)
-  - Light rolling-mean smoothing of elevation
-- ➡️ **Route Direction** - Subtle arrows along the track show the direction of travel
-- 🔄 **Reverse Route** - Button in route analysis to swap start/finish (and restore the original)
-- 🚗 **Directions to the Start** - Opens Google Maps with driving directions to the trailhead
-- 🧭 **Real Track** - During navigation the path actually walked is drawn in blue; the km and ascent/descent shown are the real ones (GPS), not those of the GPX track
-- 🗺️ **Default Map** - OpenTopoMap topographic (based on OpenStreetMap)
-- ⏱️ **Estimated Time** - Same methods as TrekkingPro: Naismith, Tobler (integrated point by point), Munter, Swiss DIN 33466 and Petzoldt. They are combined with the mean, or the median if they differ by more than 10%. It depends on your profile in Settings: fitness, pace, pack weight and breaks (10 min/h)
-- 🌦️ **Route Weather** - In the analysis you choose a start day and time (next 7 days) and see the weather at 5 points along the route for the hours it is expected to take. Data from Open-Meteo. On the map, the cloud button shows those 5 points with icon, temperature, time and rain probability
-- 📱 **Mobile First** - Optimized for Android, iOS, and tablets
-- 🔄 **GPX Import** - Import custom routes in GPX format
-- 💾 **Offline Maps** - Download map tiles for offline use
-- 🌙 **Dark Mode** - Easy on the eyes during night navigation
-
-### Mobile Features (Android Optimized)
-
-- 🔋 **Battery Monitoring** - See your device battery level in-app
-- 📡 **Network Awareness** - Know when you're online/offline
-- 📍 **High Precision GPS** - Continuous location tracking
-- 🧭 **Device Orientation** - Auto-rotating maps based on compass
-- 📳 **Haptic Feedback** - Vibration alerts for off-route warnings
-- 🔒 **Screen Wake Lock** - Prevent screen from sleeping during navigation
-- 💫 **Gesture Navigation** - Swipe right to go back, left to go home
-
-### Technical Features
-
-- ⚡ **PWA Architecture** - Install as native app on Android
-- 🔐 **Service Workers** - Intelligent caching strategies
-- 🎨 **Responsive Design** - Works on all screen sizes
-- ♿ **Accessible** - WCAG 2.1 AA compliant
-- 🚀 **Performance** - Fast load times, optimized for low-end devices
-- 🔋 **Low Battery Mode** - Reduced animations to save power
-
-## 🗺️ Available Maps
-
-All are raster tiles (verified with HTTP 200 responses). Switch them from the layers button on the map and in navigation, or from Settings. The choice is saved and is the one downloaded for offline use.
-
-| Style | Source | Max zoom | Recommended use |
-| --- | --- | --- | --- |
-| Topographic (OpenTopoMap) — **default** | OpenTopoMap (OSM + SRTM data) | 17 | Hiking: contour lines, trails and summits |
-| Streets (OpenStreetMap) | tile.openstreetmap.org | 19 | Roads, towns and urban detail |
-| Topographic (Esri) | Esri World Topo Map | 18 | A lighter topographic alternative |
-| Satellite (Esri) | Esri World Imagery | 18 | Real terrain, tracks and vegetation |
-| Light (CARTO Voyager) | basemaps.cartocdn.com | 19 | Clean, readable background |
-
-In addition, the "Catalunya · bundled" mode of the explorer uses a vector base map included in the app (`public/maps/catalunya.json`) that works without a network.
-
-Notes:
-
-- The Stamen styles were removed because their tile service is no longer available; saved settings using removed styles automatically fall back to topographic (duplicate Carto/Esri styles map to their equivalent).
-- Public providers limit heavy use: download only the areas you need for offline.
-
----
-
-## 📥 Installation
-
-### Dependencies
-
-- Node.js 18+
-- npm or yarn
-- Modern web browser (Chrome 90+, Firefox 88+, Safari 15+)
-
-### Setup (Development)
-
-1. **Clone or extract the project**
-
-   ```bash
-   cd TrailNav
-   ```
-
-2. **Install dependencies**
-
-   ```bash
-   npm install
-   ```
-
-3. **Create .env.local** (if using Gemini API)
-
-   ```bash
-   cp .env.example .env.local
-   # Edit with your API key
-   ```
-
-4. **Run development server**
-
-   ```bash
-   npm run dev
-   ```
-
-   Open <http://localhost:3000> in your browser
-
-### Build for Production
-
-```bash
-npm run build
-npm run preview  # Test build locally
+```sh
+npm ci
+npm run dev
 ```
 
----
+Abrir <http://localhost:5173>. No hacen falta claves de API ni archivos de entorno para las funciones actuales. Si el puerto esta ocupado, Vite muestra el puerto alternativo.
 
-## 📱 Install as Android App
-
-### Option 1: Chrome Browser (Recommended)
-
-1. Open TrailNav in Chrome
-2. Tap menu (⋮) → **"Install"** or **"Instalar aplicación"**
-3. App will appear on home screen
-4. Tap to launch in fullscreen mode
-
-### Option 2: Web App Shortcut
-
-1. Chrome menu → **"Add to Home Screen"**
-2. Choose app icon and name
-3. Launches in standalone mode
-
-### Benefits
-
-✅ Runs offline after first load  
-✅ Works like a native app  
-✅ No Google Play installation needed  
-✅ Instant updates  
-✅ Full access to device features  
-
----
-
-## 🚀 Usage
-
-### Importing Routes
-
-1. Tap **"Import GPX"** button
-2. Select a .gpx file from your device
-3. Route will be analyzed and stored
-
-### Navigating a Route
-
-1. Select a route from "Your Routes"
-2. Tap **"Navigate Now"** button
-3. Follow the orange line on the map (arrows show the direction); your real path is drawn in blue
-4. Real-time metrics show:
-   - Real distance and real ascent/descent walked (from GPS, may differ from the GPX)
-   - Progress along the route and distance remaining
-   - Current speed
-   - Elevation
-   - GPS accuracy
-   - Compass heading
-
-### Route Analysis
-
-- View full route statistics
-- See elevation profile
-- Check total distance and elevation gain
-- Analyze difficulty level
-- Plan estimated time
-- Tap **Reverse direction** (UI: "Invertir sentido") to run the route end-to-start (tap again to restore; disabled while navigating it)
-- Tap **Directions to the start** (UI: "Cómo llegar al inicio") to get driving directions to the trailhead in Google Maps
-- Pick a start day/time and see the weather along the route for its estimated duration
-- Tune your hiking profile (fitness, pace, pack, breaks) in Settings to adjust the time estimate
-
-### Offline Mode
-
-- All downloaded maps work offline
-- Routes stay accessible offline
-- GPS works without internet
-- Share routes via files
-
----
-
-## ☑️ Android Optimizations (v2.0)
-
-See [MEJORAS_ANDROID.md](MEJORAS_ANDROID.md) for detailed improvements.
-
-### What's New in v2.0
-
-#### 🎯 Features
-
-- Battery status monitoring
-- Online/offline detection
-- Device orientation support
-- Haptic feedback for alerts
-- Screen wake lock during navigation
-- Improved gesture controls
-- Better error handling
-
-#### 🎨 UI/UX
-
-- Larger touch targets (44px minimum)
-- Better color contrast
-- Optimized font sizes
-- Smoother animations
-- Gradient backgrounds
-- Better visual hierarchy
-- Improved dark mode
-
-#### ⚡ Performance
-
-- Code splitting (separate vendor bundles)
-- Intelligent caching (60 days for maps)
-- Service worker optimizations
-- Reduced bundle size
-- Hardware acceleration
-- Better battery usage
-
-#### 🔐 Features
-
-- Safe area insets for notches
-- Meta tags for Android/iOS
-- PWA manifest with shortcuts
-- Share Target API ready
-- Offline fallback pages
-
----
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-TrailNav/
-├── src/
-│   ├── components/          # Reusable UI components
-│   ├── screens/             # Main app screens
-│   ├── hooks/               # Custom React hooks
-│   ├── lib/                 # Utilities (geolocation, etc)
-│   ├── App.tsx              # Main app component
-│   ├── main.tsx             # Entry point
-│   └── index.css            # Global styles
-├── public/
-│   ├── manifest.webmanifest # PWA configuration
-│   └── icon.svg             # App icon
-├── vite.config.ts           # Vite configuration
-├── tsconfig.json            # TypeScript config
-└── package.json
+```sh
+npm run check
+npm run preview
 ```
 
-### Available Scripts
+`check` ejecuta TypeScript, pruebas y compilacion PWA. `preview` sirve el resultado de produccion en <http://localhost:4173> por defecto; no es un servidor de despliegue. Los instaladores [SETUP.bat](SETUP.bat) y [SETUP.sh](SETUP.sh) automatizan la instalacion reproducible y estas comprobaciones.
 
-```bash
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run preview  # Preview production build
-npm run clean    # Clean build artifacts
-npm run lint     # Check TypeScript
-```
+## Usar La Aplicacion
 
-### Environment Variables
+1. Importar un archivo local desde Rutas; tambien admite una URL HTTPS directa si el servidor permite CORS.
+2. Revisar distancia, desnivel, perfil y estimaciones de tiempo. Las ediciones por recorte o simplificacion guardan una copia.
+3. Descargar la zona y el estilo necesarios desde Offline antes de salir.
+4. Iniciar la navegacion y conceder ubicacion. La sesion sigue activa al cambiar de pantalla.
+5. Exportar el recorrido real antes de finalizar si se quiere conservarlo como archivo GPX.
 
-```env
-VITE_API_KEY=your_api_key_here
-```
+Tambien se puede abrir Mapa sin ruta para consultar la posicion. La meteorologia de Open-Meteo necesita red para actualizarse; los tiempos estimados no sustituyen la planificacion personal.
 
-### Tech Stack
+## Offline Y Seguridad
 
-- **React 19** - UI framework
-- **TypeScript** - Type safety
-- **Tailwind CSS 4** - Styling
-- **Vite 6** - Build tool
-- **MapLibre GL** - Mapping
-- **Turf.js** - Geospatial analysis
-- **Workbox** - Service Worker management
+- La primera carga necesita conexion. El service worker solo se genera en produccion; probar offline con `build` y `preview`, no con `dev`.
+- Las rutas, ajustes y teselas descargadas viven en IndexedDB del navegador. La sesion activa y su recorrido usan localStorage. No hay sincronizacion ni copia remota.
+- El navegador puede borrar estos datos. Exportar rutas importantes; limpiar datos del sitio o desinstalar puede hacerlos desaparecer.
+- OpenStreetMap es el estilo predeterminado. Tambien hay OpenTopoMap, Esri y CARTO. La cobertura detallada sin red depende de las regiones guardadas, no de haber abierto el mapa una vez.
+- [public/maps/catalunya.json](public/maps/catalunya.json) es una referencia Natural Earth 1:10M incluida en la PWA. No contiene senderos, curvas de nivel ni detalle para orientacion de seguridad. Fuente: <https://www.naturalearthdata.com/about/terms-of-use/>.
+- Respetar atribuciones, licencias y condiciones de descarga de cada proveedor. La existencia de una opcion de descarga no autoriza usos masivos.
+- GPS, brujula, audio, vibracion y pantalla encendida dependen del navegador y los permisos. HTTPS o localhost son necesarios para APIs sensibles. No se garantiza seguimiento con el telefono bloqueado ni una autonomia determinada.
+- La app no sustituye cartografia de seguridad ni servicios de emergencia. SOS prepara acciones que debe confirmar la persona; no envia ni llama automaticamente.
 
----
+Instalacion y comprobacion en telefono: [GUIA_RAPIDA_ANDROID.md](GUIA_RAPIDA_ANDROID.md).
 
-## 📖 API Reference
+## Para Contribuir
 
-### Hooks
+- [CONTRIBUTING.md](CONTRIBUTING.md): arquitectura, convenciones, pruebas y entrega.
+- [FEATURES_STATUS.md](FEATURES_STATUS.md): funciones implementadas, limitaciones y trabajo pendiente. Es la unica fuente de estado funcional.
+- [Especificacion de producto.txt](Especificacion%20de%20producto.txt): referencia de producto, no certificacion de funciones implementadas.
 
-#### `useGeolocation(enableTracking, enableHighAccuracy)`
-
-```typescript
-const location = useGeolocation(true, true);
-// Returns: { latitude, longitude, accuracy, altitude, heading, speed, ... }
-```
-
-#### `useBatteryStatus()`
-
-```typescript
-const battery = useBatteryStatus();
-// Returns: { level, charging, dischargingTime, chargingTime }
-```
-
-#### `useOnlineStatus()`
-
-```typescript
-const isOnline = useOnlineStatus();
-// Returns: boolean
-```
-
-#### `useDeviceOrientation()`
-
-```typescript
-const { alpha, beta, gamma } = useDeviceOrientation();
-// Returns: device orientation angles
-```
-
-#### `useVibration()`
-
-```typescript
-const vibration = useVibration();
-vibration.vibrate(100);           // Single pulse
-vibration.vibrate([100, 50, 100]); // Pattern
-vibration.cancel();               // Stop
-```
-
----
-
-## 🐛 Troubleshooting
-
-### GPS Not Working
-
-- **Check:** Settings → Location permissions (on)
-- **Check:** Device location is enabled
-- **Try:** Restart browser or app
-- **Note:** High accuracy requires open sky view
-
-### Maps Not Loading Offline
-
-- **Check:** Maps were downloaded in "Offline Maps" section
-- **Check:** You have sufficient storage space
-- **Try:** Clear cache and re-download
-
-### Battery Status Not Showing
-
-- **Note:** Only available on Android, some devices
-- **Note:** Requires Battery Status API support
-
-### App Running Slow
-
-- **Try:** Clear app cache (Settings → Storage)
-- **Try:** Disable animations (Settings → Accessibility)
-- **Check:** Available device storage
-
-### Can't Install as App
-
-- **Requirement:** Must use Chrome or Edge browser
-- **Requirement:** Site must be served over HTTPS
-- **Try:** Visit in incognito tab first
-- **Try:** Clear browser cache
-
----
-
-## 📊 Browser Support
-
-| Browser | Android | iOS | Desktop |
-| --------- | --------- | ----- | --------- |
-| Chrome | ✅ Full | ✅ Web | ✅ Full |
-| Firefox | ✅ Full | ⚠️ Limited | ✅ Full |
-| Safari | ✅ Web | ✅ Limited | ✅ Limited |
-| Edge | ✅ Full | ⚠️ Limited | ✅ Full |
-
-✅ = Full support  
-⚠️ = Limited features  
-❌ = Not supported
-
----
-
-## 📄 License
-
-MIT License - See LICENSE file for details
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
-
----
-
-## 👨‍💻 Author
-
-**TrailNav Development Team**
-
----
-
-## 📞 Support
-
-For issues and suggestions:
-
-- Check existing issues
-- Create a new issue with details
-- Include device/browser info
-- Attach error screenshots
-
----
-
-## 🙏 Acknowledgments
-
-- MapLibre GL for mapping
-- Turf.js for geospatial computation
-- React and Vite communities
-- All trail enthusiasts testing the app
-
----
-
-<div align="center">
-
-**Happy trails! 🥾🗺️**
-
-[Back to top](#-trailnav---offline-trail-navigation)
-
-</div>
+No hay una certificacion publicada de accesibilidad, seguridad, autonomia o compatibilidad con todos los dispositivos. Consultar el estado y ejecutar las comprobaciones antes de dar una capacidad por validada.

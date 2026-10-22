@@ -2,6 +2,7 @@
   "include": [
     "src/main.tsx",
     "src/vite-env.d.ts",
+    "scripts/mobile-features.test.ts",
     "vite.config.ts"
   ],
   "exclude": [

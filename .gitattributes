@@ -1,0 +1,2 @@
+SETUP.sh text eol=lf
+SETUP.bat text eol=crlf

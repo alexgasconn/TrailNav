@@ -29,6 +29,8 @@ export function addTrackPoint(
     altitude: number | null,
     accuracy: number | null
 ): boolean {
+    if (!Number.isFinite(lng) || Math.abs(lng) > 180 || !Number.isFinite(lat) || Math.abs(lat) > 90) return false;
+    if (accuracy != null && (!Number.isFinite(accuracy) || accuracy < 0)) return false;
     if (accuracy != null && accuracy > MAX_ACCURACY) return false;
 
     const last = track.points[track.points.length - 1];
@@ -84,9 +86,12 @@ export function addTrackPoint(
 }
 
 /** Reconstruye distancias y desniveles a partir de puntos persistidos. */
-export function replayTrack(points: [number, number, number][]): ActualTrack {
+export function replayTrack(points: unknown): ActualTrack {
     const track = createActualTrack();
-    for (const [lng, lat, alt] of points) {
+    if (!Array.isArray(points)) return track;
+    for (const point of points) {
+        if (!Array.isArray(point) || point.length < 2) continue;
+        const [lng, lat, alt] = point;
         addTrackPoint(track, lng, lat, Number.isFinite(alt) ? alt : null, null);
     }
     return track;
