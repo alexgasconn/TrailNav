@@ -60,16 +60,40 @@
         "method": "POST",
         "enctype": "multipart/form-data",
         "params": {
+            "url": "url",
+            "text": "text",
             "files": [
                 {
                     "name": "route",
                     "accept": [
                         ".gpx",
+                        ".kml",
+                        ".geojson",
+                        ".json",
+                        "application/vnd.google-earth.kml+xml",
+                        "application/geo+json",
+                        "application/json",
                         "text/xml",
                         "application/gpx+xml"
                     ]
                 }
             ]
         }
-    }
+    },
+    "file_handlers": [
+        {
+            "action": "/?action=import",
+            "accept": {
+                "application/gpx+xml": [
+                    ".gpx"
+                ],
+                "application/vnd.google-earth.kml+xml": [
+                    ".kml"
+                ],
+                "application/geo+json": [
+                    ".geojson"
+                ]
+            }
+        }
+    ]
 }

@@ -1,30 +1,28 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, UploadCloud } from 'lucide-react';
-import { parseGPX } from '../lib/gpx';
+import { parseRouteFile } from '../lib/gpx';
 import { Route, saveRoute } from '../lib/db';
 import { Screen } from '../App';
 import { formatDistance, formatElevation } from '../lib/format';
 import { getRouteProfile } from '../lib/routeProfile';
 
-export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: Route) => void }) {
+export function RouteImportScreen({ onNavigate, initialFile, onFileConsumed }: { onNavigate: (s: Screen, r?: Route) => void; initialFile?: File | null; onFileConsumed?: () => void }) {
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [imported, setImported] = useState<Route | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [routeUrl, setRouteUrl] = useState('');
+    const sharedReadRef = useRef(false);
+    const launchReadRef = useRef<File | null>(null);
 
     const handleFile = async (file: File) => {
-        if (!file.name.toLowerCase().endsWith('.gpx')) {
-            setError('Selecciona un archivo con extensión .gpx');
-            return;
-        }
-
         setIsProcessing(true);
         setError(null);
         setImported(null);
 
         try {
-            const route = await parseGPX(file);
+            const route = await parseRouteFile(file);
             await saveRoute(route);
             setImported(route);
         } catch (parseError: any) {
@@ -32,6 +30,57 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
         } finally {
             setIsProcessing(false);
         }
+    };
+
+    useEffect(() => {
+        if (!initialFile || launchReadRef.current === initialFile) return;
+        launchReadRef.current = initialFile;
+        void handleFile(initialFile);
+        onFileConsumed?.();
+    }, [initialFile]);
+
+    useEffect(() => {
+        if (sharedReadRef.current) return;
+        sharedReadRef.current = true;
+        const url = new URL(window.location.href);
+        const id = url.searchParams.get('shared');
+        if (url.searchParams.has('url')) setRouteUrl(url.searchParams.get('url') ?? '');
+        if (url.searchParams.has('shareError')) setError('No se pudo recibir el archivo. Selecciona un GPX, KML o GeoJSON de hasta 20 MB.');
+        for (const key of ['shared', 'url', 'shareError', 'action']) url.searchParams.delete(key);
+        window.history.replaceState(window.history.state, '', url.href);
+        if (!id || !/^[\da-f-]{36}$/i.test(id)) return;
+        void (async () => {
+            try {
+                const cache = await caches.open('trailnav-shared-routes');
+                const key = new URL(`__shared_route/${id}`, new URL(import.meta.env.BASE_URL, window.location.origin));
+                const response = await cache.match(key);
+                if (!response) throw new Error('El archivo compartido ya no está disponible');
+                const file = new File([await response.blob()], decodeURIComponent(response.headers.get('X-File-Name') || 'ruta.gpx'));
+                await handleFile(file);
+                await cache.delete(key);
+            } catch { setError('No se pudo abrir el archivo compartido. Selecciónalo desde el almacenamiento.'); }
+        })();
+    }, []);
+
+    const importUrl = async (event: React.FormEvent) => {
+        event.preventDefault();
+        setError(null);
+        setImported(null);
+        setIsProcessing(true);
+        try {
+            const url = new URL(routeUrl);
+            if (url.protocol !== 'https:') throw new Error('Utiliza un enlace HTTPS directo al archivo');
+            const response = await fetch(url, { signal: AbortSignal.timeout(30000), credentials: 'omit' });
+            if (!response.ok) throw new Error('No se pudo descargar el archivo');
+            if (Number(response.headers.get('content-length')) > 20 * 1024 * 1024) throw new Error('El archivo supera 20 MB');
+            const blob = await response.blob();
+            const name = decodeURIComponent(url.pathname.split('/').pop() || 'ruta.gpx');
+            const route = await parseRouteFile(new File([blob], name));
+            await saveRoute(route);
+            setImported(route);
+        } catch (cause) {
+            setError(cause instanceof Error && cause.message !== 'Failed to fetch' ? cause.message : 'El servidor no permite descargar el enlace (CORS) o no hay conexión. Descarga el archivo e impórtalo.');
+        } finally { setIsProcessing(false); }
     };
 
     return (
@@ -59,7 +108,7 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
             >
                 <input
                     type="file"
-                    accept=".gpx,application/gpx+xml"
+                    accept=".gpx,.kml,.geojson,.json,application/gpx+xml,application/vnd.google-earth.kml+xml,application/geo+json"
                     className="hidden"
                     ref={fileInputRef}
                     onChange={(event) => {
@@ -72,7 +121,7 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
                 <span className="grid place-items-center w-16 h-16 rounded-full bg-moss-soft text-moss-strong mx-auto">
                     <UploadCloud size={30} strokeWidth={1.6} />
                 </span>
-                <p className="text-base font-medium text-ink mt-4">Selecciona un archivo GPX</p>
+                <p className="text-base font-medium text-ink mt-4">GPX · KML · GeoJSON</p>
                 <p className="text-sm text-ink-soft mt-1">También puedes arrastrarlo hasta aquí</p>
 
                 <button
@@ -84,6 +133,12 @@ export function RouteImportScreen({ onNavigate }: { onNavigate: (s: Screen, r?: 
                     {isProcessing ? 'Analizando…' : 'Buscar archivo'}
                 </button>
             </div>
+
+            <form onSubmit={importUrl} className="mt-5 space-y-2">
+                <label htmlFor="route-url" className="text-sm font-medium">Enlace directo a una ruta</label>
+                <input id="route-url" type="url" required value={routeUrl} onChange={(event) => setRouteUrl(event.target.value)} placeholder="https://…/ruta.gpx" className="w-full min-h-12 px-3 rounded-lg border border-line bg-surface" />
+                <button disabled={isProcessing} className="w-full min-h-12 rounded-lg border border-line font-semibold disabled:opacity-50">Importar enlace</button>
+            </form>
 
             {error && (
                 <div className="mt-4 p-4 bg-clay-soft border border-clay/25 rounded-2xl flex items-start gap-3 text-clay">

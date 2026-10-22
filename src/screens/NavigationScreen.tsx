@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
-import { AlertTriangle, ChevronDown, Compass, Crosshair, Flag, Pause, Play, Layers, Eye, EyeOff, Satellite } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Compass, Crosshair, Download, Flag, Maximize, Pause, Play, Layers, Eye, EyeOff, Satellite, Smartphone, Sun, X } from 'lucide-react';
 import { Screen } from '../App';
 import { Route, getSettings, saveSettings, MapStyleId, MAP_STYLE_IDS } from '../lib/db';
 import { SessionMetrics, useNavigationSession } from '../state/navigationSession';
@@ -21,6 +21,8 @@ import {
 } from '../lib/mapStyles';
 import { MetricPanels } from '../components/MetricPanels';
 import { CurrentRampPanel } from '../components/CurrentRampPanel';
+import { EmergencyPanel } from '../components/EmergencyPanel';
+import { enableAlertAudio } from '../lib/alerts';
 import {
     formatClock,
     formatDistance,
@@ -65,6 +67,8 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     const [showPanels, setShowPanels] = useState(true);
     const [mapStyle, setMapStyle] = useState<MapStyleId>('osm');
     const [showMapMenu, setShowMapMenu] = useState(false);
+    const [showSOS, setShowSOS] = useState(false);
+    const [controlError, setControlError] = useState<string | null>(null);
     const mapMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
     // smoothing refs
@@ -375,6 +379,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 try {
                     map.easeTo({
                         center: [sm.lng, sm.lat],
+                        zoom: session.settings.autoZoom ? (speed < 6 ? 16.5 : speed < 18 ? 15.5 : 14) : map.getZoom(),
                         bearing: rotateWithHeading ? (displayOrient ?? map.getBearing()) : 0,
                         duration: 700,
                         easing: (t) => t,
@@ -382,7 +387,21 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                 } catch (e) { }
             }
         }
-    }, [position, heading, course, following, rotateWithHeading, mapReady]);
+    }, [position, heading, course, following, rotateWithHeading, mapReady, session.settings.autoZoom]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+        const apply = () => {
+            if (map.getLayer('base')) {
+                map.setPaintProperty('base', 'raster-contrast', session.settings.sunlightMode ? 0.45 : 0);
+                map.setPaintProperty('base', 'raster-saturation', session.settings.sunlightMode ? -0.65 : 0);
+            }
+        };
+        apply();
+        map.on('style.load', apply);
+        return () => { map.off('style.load', apply); };
+    }, [mapReady, session.settings.sunlightMode]);
 
     useEffect(() => {
         try {
@@ -432,9 +451,17 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
     };
 
     const panels = useMemo(() => buildPanels(metrics, profile, route, slopeWindowMeters, setSlopeWindowMeters), [metrics, profile, route, slopeWindowMeters]);
+    const updatePreference = async (patch: Partial<typeof session.settings>) => {
+        try {
+            const current = await getSettings();
+            const next = { ...current, ...patch };
+            await saveSettings(next);
+            session.applySettings(next);
+        } catch { setControlError('No se pudo guardar el ajuste'); }
+    };
 
     return (
-        <div className="w-full h-full relative overflow-hidden bg-canvas">
+        <div onPointerDownCapture={() => { if (session.settings.soundAlerts || session.settings.voiceAlerts) enableAlertAudio(); }} className={`w-full h-full relative overflow-hidden bg-canvas ${session.settings.sunlightMode ? 'sunlight-mode' : ''}`}>
             <div ref={containerRef} className="absolute inset-0" />
 
             {/* Diagnostic box removed per user request */}
@@ -537,6 +564,8 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
             {/* Floating toggle removed — use top header toggle only */}
 
             <div className="absolute bottom-0 left-0 right-0 z-20 pb-safe">
+                {session.notice && <div role="status" className="mx-3 mb-2 bg-surface border-2 border-moss p-3 rounded-lg flex items-center gap-2"><p className="flex-1 text-sm font-semibold">{session.notice}</p><button onClick={session.dismissNotice} aria-label="Cerrar aviso" className="touch-target grid place-items-center"><X size={20} /></button></div>}
+                {controlError && <p role="alert" className="mx-3 bg-surface text-alert text-sm p-2">{controlError}</p>}
                 {metrics?.offRoute && (
                     <div className="mx-3 mb-2 bg-alert text-white px-4 py-3 rounded-xl flex items-center gap-3 shadow-lg">
                         <AlertTriangle size={22} className="shrink-0" />
@@ -553,9 +582,9 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     </div>
                 )}
 
-                {status === 'paused' && (
+                {(status === 'paused' || session.autoPaused) && (
                     <div className="mx-3 mb-2 bg-surface border border-line text-ink-soft px-4 py-2.5 rounded-xl text-sm text-center">
-                        Actividad en pausa. El tiempo y la media no avanzan.
+                        {session.autoPaused ? 'Auto-pausa. Se reanudará al moverte.' : 'Actividad en pausa. El tiempo y la media no avanzan.'}
                     </div>
                 )}
 
@@ -565,7 +594,14 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                             <MetricPanels panels={panels} onDismiss={() => setShowPanels(false)} />
                         </div>
                     )}
-
+                    <div className="grid grid-cols-6 px-3 pb-2">
+                        <button onClick={() => { setFollowing(true); if (position) mapRef.current?.easeTo({ center: [position.lng, position.lat], duration: 500 }); }} className="touch-target grid place-items-center" aria-label="Centrar mapa" title="Centrar mapa"><Crosshair size={22} /></button>
+                        <button onClick={session.toggleScreenAwake} className={`touch-target grid place-items-center ${session.settings.screenAlwaysOn ? 'text-moss' : 'text-ink-soft'}`} aria-pressed={session.settings.screenAlwaysOn} aria-label="Pantalla siempre encendida" title="Pantalla siempre encendida"><Smartphone size={22} /></button>
+                        <button onClick={() => void updatePreference({ sunlightMode: !session.settings.sunlightMode })} className="touch-target grid place-items-center" aria-pressed={session.settings.sunlightMode} aria-label="Modo luz solar" title="Modo luz solar"><Sun size={22} /></button>
+                        <button onClick={() => void updatePreference({ autoZoom: !session.settings.autoZoom })} className="touch-target grid place-items-center" aria-pressed={session.settings.autoZoom} aria-label="Auto-zoom por velocidad" title="Auto-zoom por velocidad"><Maximize size={22} /></button>
+                        <button disabled={trail.length < 2} onClick={session.exportTrack} className="touch-target grid place-items-center disabled:opacity-30" aria-label="Exportar recorrido grabado" title="Exportar recorrido grabado"><Download size={22} /></button>
+                        <button onClick={() => setShowSOS(true)} className="touch-target grid place-items-center text-alert" aria-label="SOS y compartir ubicación" title="SOS y compartir ubicación"><AlertTriangle size={22} /></button>
+                    </div>
                     <div className="flex gap-2 px-4 pt-4">
                         <button
                             onClick={() => (status === 'active' ? session.pauseSession() : session.resumeSession())}
@@ -593,6 +629,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                             Llevas {formatDistance(metrics?.actualDistance ?? 0)} en {formatClock(metrics?.movingSeconds ?? 0)}. La
                             sesión se cerrará y el progreso se descartará.
                         </p>
+                        <button disabled={trail.length < 2} onClick={session.exportTrack} className="w-full min-h-12 mt-3 border border-line rounded-lg flex items-center justify-center gap-2 disabled:opacity-40"><Download size={18} />Exportar grabación GPX</button>
                         <div className="flex gap-2 mt-5">
                             <button onClick={() => setConfirmFinish(false)} className="flex-1 h-12 rounded-xl border border-line font-medium">
                                 Seguir navegando
@@ -611,6 +648,7 @@ function NavigationView({ route, onNavigate }: { route: Route; onNavigate: (s: S
                     </div>
                 </div>
             )}
+            {showSOS && <EmergencyPanel position={position} onClose={() => setShowSOS(false)} />}
         </div>
     );
 }
@@ -633,11 +671,11 @@ function buildPanels(metrics: SessionMetrics | null, profile: ReturnType<typeof 
                 { label: 'D−', value: metrics.actualDescent != null ? formatElevation(metrics.actualDescent) : '—' },
                 {
                     label: 'D+ restante',
-                    value: metrics.actualAscent != null ? formatElevation(Math.max(0, profile.totalAscent - metrics.actualAscent)) : '—',
+                    value: metrics.ascentRemaining != null ? formatElevation(metrics.ascentRemaining) : '—',
                 },
                 {
                     label: 'D− restante',
-                    value: metrics.actualDescent != null ? formatElevation(Math.max(0, profile.totalDescent - metrics.actualDescent)) : '—',
+                    value: metrics.descentRemaining != null ? formatElevation(metrics.descentRemaining) : '—',
                 },
             ],
         },

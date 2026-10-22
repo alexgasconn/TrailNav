@@ -3,6 +3,7 @@ import type { StyleSpecification } from 'maplibre-gl';
 import { MapStyleId } from './db';
 import { registerTileProtocol, tileAttribution, tileMaxZoom, tileTemplate } from './offlineTiles';
 import { RoutePoint, RoutePointKind } from './routePoints';
+import { buildRouteProfile, indexAtDistance } from './routeProfile';
 
 export const MAP_STYLE_LABELS: Record<MapStyleId, string> = {
     topo: 'Topográfico (OpenTopoMap)',
@@ -140,6 +141,24 @@ export function addRouteLayers(map: maplibregl.Map, geoJson: any, options: Route
         });
     }
 
+    const profile = buildRouteProfile({ geoJson });
+    if (profile.hasElevation && !map.getSource('route-grades')) {
+        const features = profile.coordinates.slice(0, -1).map((coordinate, index) => {
+            const before = indexAtDistance(profile, Math.max(0, profile.cumulativeDistance[index] - 45));
+            const after = indexAtDistance(profile, Math.min(profile.totalDistance, profile.cumulativeDistance[index] + 45));
+            const span = profile.cumulativeDistance[after] - profile.cumulativeDistance[before];
+            const grade = span > 0 ? (profile.elevation[after] - profile.elevation[before]) / span * 100 : 0;
+            return { type: 'Feature' as const, properties: { grade }, geometry: { type: 'LineString' as const, coordinates: [coordinate, profile.coordinates[index + 1]] } };
+        });
+        map.addSource('route-grades', { type: 'geojson', data: { type: 'FeatureCollection', features } });
+        map.addLayer({
+            id: 'route-grades', type: 'line', source: 'route-grades', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: {
+                'line-width': width,
+                'line-color': ['interpolate', ['linear'], ['get', 'grade'], -20, '#153e75', -3, '#2986c6', 0, '#3f8f5a', 4, '#8bbf4a', 8, '#e6c229', 12, '#f08a24', 18, '#d9381e', 25, '#351313'],
+            }
+        });
+    }
+
     if (options.showActualTrack) {
         if (!map.getSource(ACTUAL_TRACK_SOURCE)) {
             map.addSource(ACTUAL_TRACK_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -194,6 +213,7 @@ export function addRouteLayers(map: maplibregl.Map, geoJson: any, options: Route
 export function setRouteAlertState(map: maplibregl.Map, offRoute: boolean) {
     if (!map.getLayer('route-line')) return;
     map.setPaintProperty('route-line', 'line-color', offRoute ? '#b91c1c' : '#c2410c');
+    if (map.getLayer('route-grades')) map.setLayoutProperty('route-grades', 'visibility', offRoute ? 'none' : 'visible');
 }
 
 /** Etiqueta compacta con el tiempo previsto en un punto de la ruta. */

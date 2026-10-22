@@ -24,6 +24,43 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "TrailNav: install coordinate projection",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\nodejs\\npm.cmd' install proj4",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "TrailNav: typecheck",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\nodejs\\node.exe' node_modules/typescript/bin/tsc --noEmit",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "TrailNav: install React types",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\nodejs\\npm.cmd' install --save-dev @types/react@^19 @types/react-dom@^19",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "TrailNav: mobile feature tests",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\nodejs\\node.exe' --import tsx --test scripts/mobile-features.test.ts",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "TrailNav: mobile preview",
+			"type": "shell",
+			"command": "& 'C:\\Program Files\\nodejs\\npm.cmd' run preview -- --host 127.0.0.1 --port 4180",
+			"isBackground": true,
+			"problemMatcher": []
 		}
 	]
 }

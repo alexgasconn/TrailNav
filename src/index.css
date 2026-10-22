@@ -134,6 +134,16 @@
   white-space: nowrap;
 }
 
+.sunlight-mode {
+  --color-canvas: #ffffff;
+  --color-surface-soft: #ffffff;
+  --color-line: #444444;
+  --color-ink: #000000;
+  --color-ink-soft: #171717;
+  --color-ink-faint: #333333;
+  --color-moss: #164d2e;
+}
+
 /* Controles de MapLibre adaptados al tema claro. */
 .maplibregl-ctrl-group {
   border-radius: 12px !important;

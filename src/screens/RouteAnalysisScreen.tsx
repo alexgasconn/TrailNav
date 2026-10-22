@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowLeftRight, Car, Map as MapIcon, Navigation2, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, Car, Copy, Download, Scissors, Map as MapIcon, Navigation2, TrendingDown, TrendingUp } from 'lucide-react';
 import { Route, getSettings, saveRoute } from '../lib/db';
 import { reverseRoute } from '../lib/reverseRoute';
+import { duplicateRoute, editRouteCopy } from '../lib/routeTools';
+import { downloadGPX } from '../lib/gpx';
 import { Screen } from '../App';
 import { TerrainSegment, analyzeRoute } from '../lib/routeAnalysis';
 import { getRouteProfile } from '../lib/routeProfile';
@@ -32,6 +34,22 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
     const [confirmReverse, setConfirmReverse] = useState(false);
     const [reversing, setReversing] = useState(false);
     const [reverseError, setReverseError] = useState<string | null>(null);
+    const [editing, setEditing] = useState(false);
+    const [startPercent, setStartPercent] = useState(0);
+    const [endPercent, setEndPercent] = useState(100);
+    const [tolerance, setTolerance] = useState(0);
+    const [saving, setSaving] = useState(false);
+    const saveCopy = async (edit: boolean) => {
+        setSaving(true);
+        setReverseError(null);
+        try {
+            const copy = edit ? editRouteCopy(route, startPercent, endPercent, tolerance) : duplicateRoute(route);
+            await saveRoute(copy);
+            setEditing(false);
+            onNavigate('analysis', copy);
+        } catch (cause) { setReverseError(cause instanceof Error ? cause.message : 'No se pudo guardar la copia'); }
+        finally { setSaving(false); }
+    };
 
     const startPoint = profile.coordinates[0];
     const directionsUrl = startPoint
@@ -91,6 +109,23 @@ export function RouteAnalysisScreen({ route, onNavigate }: { route: Route; onNav
                 </section>
 
                 {reverseError && <p role="alert" className="text-sm text-alert">{reverseError}</p>}
+                <div className="flex flex-wrap gap-2">
+                    <button disabled={saving} onClick={() => void saveCopy(false)} className="min-h-12 px-3 border border-line rounded-lg flex items-center gap-2 disabled:opacity-50"><Copy size={18} />Duplicar</button>
+                    <button onClick={() => downloadGPX(route)} className="min-h-12 px-3 border border-line rounded-lg flex items-center gap-2"><Download size={18} />GPX</button>
+                    <button onClick={() => setEditing(!editing)} aria-expanded={editing} className="min-h-12 px-3 border border-line rounded-lg flex items-center gap-2"><Scissors size={18} />Recortar</button>
+                </div>
+                {editing && <section className="space-y-3 border-y border-line py-4">
+                    <label className="block text-sm">Inicio · {formatDistance(profile.totalDistance * startPercent / 100)}
+                        <input aria-label="Inicio del recorte" type="range" min="0" max="99" step="1" value={startPercent} onChange={(event) => setStartPercent(Math.min(Number(event.target.value), endPercent - 1))} className="w-full h-10" />
+                    </label>
+                    <label className="block text-sm">Final · {formatDistance(profile.totalDistance * endPercent / 100)}
+                        <input aria-label="Final del recorte" type="range" min="1" max="100" step="1" value={endPercent} onChange={(event) => setEndPercent(Math.max(Number(event.target.value), startPercent + 1))} className="w-full h-10" />
+                    </label>
+                    <label className="flex flex-wrap items-center gap-2 text-sm">Simplificación aproximada
+                        <select value={tolerance} onChange={(event) => setTolerance(Number(event.target.value))} className="min-h-12 border border-line rounded-lg bg-surface px-3"><option value="0">Sin simplificar</option><option value="3">3 m</option><option value="5">5 m</option><option value="10">10 m</option></select>
+                    </label>
+                    <button disabled={saving} onClick={() => void saveCopy(true)} className="min-h-12 w-full rounded-lg bg-moss text-white font-semibold disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar copia editada'}</button>
+                </section>}
                 <section className="grid grid-cols-2 gap-3">
                     <StatCard label="Distancia" value={formatDistance(profile.totalDistance || route.distance)} />
                     <StatCard

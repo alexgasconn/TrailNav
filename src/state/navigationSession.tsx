@@ -1,8 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Route, Settings, getRoute } from '../lib/db';
+import { DEFAULT_SETTINGS, Route, Settings, getRoute } from '../lib/db';
 import { getRouteProfile, sampleProfile } from '../lib/routeProfile';
 import { matchPosition } from '../lib/mapMatching';
 import { ActualTrack, addTrackPoint, createActualTrack, replayTrack } from '../lib/actualTrack';
+import { enableAlertAudio, playAlert } from '../lib/alerts';
+import { getRoutePoints } from '../lib/routePoints';
+import * as turf from '@turf/turf';
+import { downloadGPX } from '../lib/gpx';
 
 export type SessionStatus = 'idle' | 'active' | 'paused';
 
@@ -51,6 +55,8 @@ interface PersistedSession {
     status: Exclude<SessionStatus, 'idle'>;
     distanceDone: number;
     position: SessionPosition | null;
+    autoPausedTotalMs?: number;
+    autoPausedAt?: number | null;
 }
 
 interface NavigationSessionValue {
@@ -72,6 +78,12 @@ interface NavigationSessionValue {
     stopSession: () => void;
     deviationThreshold: number;
     applySettings: (settings: Settings) => void;
+    settings: Settings;
+    autoPaused: boolean;
+    notice: string | null;
+    dismissNotice: () => void;
+    exportTrack: () => void;
+    toggleScreenAwake: () => void;
 }
 
 const STORAGE_KEY = 'trailnav-active-session';
@@ -112,6 +124,15 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
     const [trackVersion, setTrackVersion] = useState(0);
     const [deviationThreshold, setDeviationThreshold] = useState(30);
     const [screenAlwaysOn, setScreenAlwaysOn] = useState(true);
+    const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+    const settingsRef = useRef(DEFAULT_SETTINGS);
+    const [autoPaused, setAutoPaused] = useState(false);
+    const [notice, setNotice] = useState<string | null>(null);
+    const autoPausedAtRef = useRef<number | null>(null);
+    const autoPausedTotalRef = useRef(0);
+    const stationarySinceRef = useRef<number | null>(null);
+    const announcedRef = useRef(new Set<string>());
+    const previousFixRef = useRef<{ coordinate: [number, number]; timestamp: number; accuracy: number } | null>(null);
 
     const startedAtRef = useRef(0);
     const pausedTotalRef = useRef(0);
@@ -148,6 +169,9 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
                 startedAtRef.current = persisted.startedAt;
                 pausedTotalRef.current = persisted.pausedTotalMs;
                 pausedAtRef.current = persisted.pausedAt;
+                autoPausedTotalRef.current = persisted.autoPausedTotalMs ?? 0;
+                autoPausedAtRef.current = persisted.autoPausedAt ?? null;
+                setAutoPaused(autoPausedAtRef.current != null);
                 setRoute(storedRoute);
                 try {
                     const rawTrack = localStorage.getItem(TRACK_KEY);
@@ -172,8 +196,13 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
     // Brújula del dispositivo.
     useEffect(() => {
         if (status === 'idle') return;
+        if (typeof DeviceOrientationEvent === 'undefined') return;
+        let lastUpdate = 0;
 
         const onOrientation = (event: DeviceOrientationEvent) => {
+            const now = Date.now();
+            if (document.visibilityState !== 'visible' || now - lastUpdate < (settingsRef.current.batterySaver ? 800 : 150)) return;
+            lastUpdate = now;
             const raw = (event as any).webkitCompassHeading ?? (event.alpha != null ? (360 - event.alpha) % 360 : null);
             if (raw == null || !Number.isFinite(raw)) return;
             headingRef.current = smoothAngle(headingRef.current, raw);
@@ -216,7 +245,14 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
                 const { latitude, longitude, altitude, accuracy, speed, heading: gpsHeading } = browserPosition.coords;
                 setGpsError(null);
 
-                const speedKmh = typeof speed === 'number' && Number.isFinite(speed) && speed >= 0 ? speed * 3.6 : null;
+                let speedKmh = typeof speed === 'number' && Number.isFinite(speed) && speed >= 0 ? speed * 3.6 : null;
+                const previousFix = previousFixRef.current;
+                const seconds = previousFix ? (browserPosition.timestamp - previousFix.timestamp) / 1000 : 0;
+                if (speedKmh == null && previousFix && seconds >= 1 && seconds <= 30 && accuracy <= 30 && previousFix.accuracy <= 30) {
+                    const meters = turf.distance(previousFix.coordinate, [longitude, latitude], { units: 'meters' });
+                    speedKmh = meters < Math.max(5, accuracy) ? 0 : meters / seconds * 3.6;
+                }
+                previousFixRef.current = { coordinate: [longitude, latitude], timestamp: browserPosition.timestamp, accuracy };
                 if (typeof gpsHeading === 'number' && Number.isFinite(gpsHeading) && (speedKmh ?? 0) > 1) {
                     courseRef.current = smoothAngle(courseRef.current, gpsHeading, 0.35);
                     setCourse(courseRef.current);
@@ -233,7 +269,25 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
                 });
 
                 const matched = matchPosition(route, [longitude, latitude]);
-                if (addTrackPoint(trackRef.current, longitude, latitude, typeof altitude === 'number' ? altitude : null, accuracy ?? null)) {
+                const now = Date.now();
+                const preferences = settingsRef.current;
+                if (preferences.autoPause && speedKmh != null && accuracy <= 30) {
+                    if (speedKmh < preferences.autoPauseSpeed) {
+                        stationarySinceRef.current ??= now;
+                        if (now - stationarySinceRef.current >= 15000 && autoPausedAtRef.current == null) {
+                            autoPausedAtRef.current = now;
+                            setAutoPaused(true);
+                        }
+                    } else {
+                        stationarySinceRef.current = null;
+                        if (autoPausedAtRef.current != null) {
+                            autoPausedTotalRef.current += now - autoPausedAtRef.current;
+                            autoPausedAtRef.current = null;
+                            setAutoPaused(false);
+                        }
+                    }
+                }
+                if (autoPausedAtRef.current == null && addTrackPoint(trackRef.current, longitude, latitude, typeof altitude === 'number' ? altitude : null, accuracy ?? null)) {
                     setTrackVersion((value) => value + 1);
                     if (trackRef.current.points.length % 10 === 0) persistTrack();
                 }
@@ -246,7 +300,7 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
                 setDistanceDone(matched.distanceAlongRoute);
             },
             (error) => setGpsError(error.message || 'No se puede obtener la ubicación'),
-            { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+            { enableHighAccuracy: !settings.batterySaver, maximumAge: settings.batterySaver ? 10000 : 2000, timeout: 20000 }
         );
 
         return () => {
@@ -255,7 +309,7 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
                 watchIdRef.current = null;
             }
         };
-    }, [status, route, deviationThreshold, persistTrack]);
+    }, [status, route, deviationThreshold, persistTrack, settings.batterySaver]);
 
     // Guarda el recorrido real al ocultar o cerrar la app.
     useEffect(() => {
@@ -296,6 +350,14 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
     }, [status, screenAlwaysOn]);
 
     const startSession = useCallback((nextRoute: Route) => {
+        enableAlertAudio();
+        autoPausedAtRef.current = null;
+        autoPausedTotalRef.current = 0;
+        stationarySinceRef.current = null;
+        previousFixRef.current = null;
+        announcedRef.current.clear();
+        setAutoPaused(false);
+        setNotice(null);
         startedAtRef.current = Date.now();
         pausedTotalRef.current = 0;
         pausedAtRef.current = null;
@@ -316,6 +378,10 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
     const pauseSession = useCallback(() => {
         setStatus((current) => {
             if (current !== 'active') return current;
+            if (autoPausedAtRef.current != null) autoPausedTotalRef.current += Date.now() - autoPausedAtRef.current;
+            autoPausedAtRef.current = null;
+            stationarySinceRef.current = null;
+            setAutoPaused(false);
             pausedAtRef.current = Date.now();
             return 'paused';
         });
@@ -331,6 +397,11 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
     }, []);
 
     const stopSession = useCallback(() => {
+        autoPausedAtRef.current = null;
+        autoPausedTotalRef.current = 0;
+        stationarySinceRef.current = null;
+        setAutoPaused(false);
+        setNotice(null);
         setStatus('idle');
         setRoute(null);
         setPosition(null);
@@ -350,6 +421,14 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
     }, []);
 
     const applySettings = useCallback((settings: Settings) => {
+        settingsRef.current = settings;
+        setSettings(settings);
+        if (settings.soundAlerts || settings.voiceAlerts) enableAlertAudio();
+        if (!settings.autoPause && autoPausedAtRef.current != null) {
+            autoPausedTotalRef.current += Date.now() - autoPausedAtRef.current;
+            autoPausedAtRef.current = null;
+            setAutoPaused(false);
+        }
         setDeviationThreshold(settings.deviationWarningDistance);
         setScreenAlwaysOn(settings.screenAlwaysOn);
         vibrationEnabledRef.current = settings.vibrationAlerts;
@@ -364,11 +443,11 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
         const done = Math.min(Math.max(distanceDone, 0), totalDistance);
         const actual = trackRef.current;
         const actualDistance = actual.distance;
-        const remaining = Math.max(0, totalDistance - actualDistance);
+        const remaining = Math.max(0, totalDistance - done);
 
         const reference = status === 'paused' && pausedAtRef.current ? pausedAtRef.current : Date.now();
         const elapsedMs = Math.max(0, reference - startedAtRef.current);
-        const movingMs = Math.max(0, elapsedMs - pausedTotalRef.current);
+        const movingMs = Math.max(0, elapsedMs - pausedTotalRef.current - autoPausedTotalRef.current - (autoPausedAtRef.current != null ? reference - autoPausedAtRef.current : 0));
         const movingSeconds = Math.floor(movingMs / 1000);
 
         const averageSpeed = movingSeconds > 30 && actualDistance > 20 ? actualDistance / 1000 / (movingSeconds / 3600) : null;
@@ -381,10 +460,10 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             totalDistance,
             distanceDone: done,
             distanceRemaining: remaining,
-            progress: totalDistance > 0 ? Math.min(1, actualDistance / totalDistance) : 0,
+            progress: totalDistance > 0 ? Math.min(1, done / totalDistance) : 0,
             elapsedSeconds: Math.floor(elapsedMs / 1000),
             movingSeconds,
-            currentSpeed: status === 'paused' ? 0 : position?.speed ?? null,
+            currentSpeed: status === 'paused' || autoPaused ? 0 : position?.speed ?? null,
             averageSpeed,
             paceSeconds,
             altitude: position?.altitude ?? sample?.elevation ?? null,
@@ -397,11 +476,11 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             descentRemaining: sample?.remainingDescent ?? null,
             remainingSeconds,
             arrivalTimestamp: remainingSeconds != null ? Date.now() + remainingSeconds * 1000 : null,
-            offRoute: distanceFromRoute != null && distanceFromRoute > deviationThreshold,
+            offRoute: position?.accuracy != null && position.accuracy <= MAX_TRUSTED_ACCURACY && distanceFromRoute != null && distanceFromRoute > deviationThreshold,
             distanceFromRoute,
             accuracy: position?.accuracy ?? null,
         };
-    }, [route, status, distanceDone, distanceFromRoute, position, deviationThreshold, tick, trackVersion]);
+    }, [route, status, distanceDone, distanceFromRoute, position, deviationThreshold, tick, trackVersion, autoPaused]);
 
     const trail = useMemo<[number, number][]>(() => {
         void trackVersion;
@@ -418,23 +497,49 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             status: status === 'paused' ? 'paused' : 'active',
             distanceDone,
             position,
+            autoPausedTotalMs: autoPausedTotalRef.current,
+            autoPausedAt: autoPausedAtRef.current,
         };
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         } catch {
             /* almacenamiento lleno: la sesión sigue viva en memoria */
         }
-    }, [route, status, distanceDone, position]);
+    }, [route, status, distanceDone, position, autoPaused]);
 
     // Aviso háptico solo en la transición dentro/fuera de la traza.
     useEffect(() => {
         const offRoute = Boolean(metrics?.offRoute);
         if (offRoute === wasOffRouteRef.current) return;
         wasOffRouteRef.current = offRoute;
+        if (offRoute && status === 'active') playAlert('Atención, fuera de ruta', settingsRef.current.soundAlerts, settingsRef.current.voiceAlerts);
         if (vibrationEnabledRef.current && 'vibrate' in navigator) {
             navigator.vibrate(offRoute ? [140, 70, 140] : 60);
         }
     }, [metrics?.offRoute]);
+
+    useEffect(() => {
+        if (!route || !position || status !== 'active' || !settings.waypointAlerts || (position.accuracy ?? Infinity) > 50 || metrics?.offRoute) return;
+        const nearby = getRoutePoints(route).find((point) => point.kind !== 'start' && !announcedRef.current.has(point.id) &&
+            Math.abs(point.distance - distanceDone) <= settings.waypointRadius * 2 &&
+            turf.distance([position.lng, position.lat], point.coordinate, { units: 'meters' }) <= settings.waypointRadius);
+        if (!nearby) return;
+        announcedRef.current.add(nearby.id);
+        const distance = Math.round(turf.distance([position.lng, position.lat], nearby.coordinate, { units: 'meters' }));
+        const message = `A ${distance} metros: ${nearby.name}${nearby.kind === 'turn' ? ' (según el track)' : ''}`;
+        setNotice(message);
+        playAlert(message, settings.soundAlerts, settings.voiceAlerts);
+        if (settings.vibrationAlerts) navigator.vibrate?.([80, 50, 80]);
+    }, [route, position, status, settings, distanceDone, metrics?.offRoute]);
+
+    const exportTrack = useCallback(() => {
+        const coordinates = trackRef.current.points.map(([lng, lat, altitude]) => Number.isFinite(altitude) ? [lng, lat, altitude] : [lng, lat]);
+        if (coordinates.length < 2) return;
+        downloadGPX({ name: `${route?.name ?? 'Recorrido'} - grabación`, geoJson: turf.featureCollection([turf.lineString(coordinates)]) });
+    }, [route]);
+
+    const toggleScreenAwake = useCallback(() => setScreenAlwaysOn((value) => !value), []);
+    const dismissNotice = useCallback(() => setNotice(null), []);
 
     const value = useMemo<NavigationSessionValue>(
         () => ({
@@ -453,6 +558,12 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             stopSession,
             deviationThreshold,
             applySettings,
+            settings: { ...settings, screenAlwaysOn },
+            autoPaused,
+            notice,
+            dismissNotice,
+            exportTrack,
+            toggleScreenAwake,
         }),
         [
             route,
@@ -470,6 +581,7 @@ export function NavigationSessionProvider({ children }: { children: React.ReactN
             stopSession,
             deviationThreshold,
             applySettings,
+            settings, screenAlwaysOn, autoPaused, notice, dismissNotice, exportTrack, toggleScreenAwake,
         ]
     );
 

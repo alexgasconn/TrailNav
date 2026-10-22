@@ -239,6 +239,8 @@ export function OfflineMapManagerScreen({ route }: { route: Route | null }) {
                             </p>
                         )}
 
+                        <p className="text-sm text-ink-soft tabular">Tamaño estimado: {formatBytes(tileCount * 15000)} – {formatBytes(tileCount * (mapStyle === 'satellite' ? 90000 : 50000))}. El tamaño real depende de las teselas.</p>
+
                         {progress ? (
                             <div className="space-y-2">
                                 <div className="flex justify-between text-sm">
@@ -273,7 +275,7 @@ export function OfflineMapManagerScreen({ route }: { route: Route | null }) {
 
                         {error && <p className="text-sm text-alert">{error}</p>}
                         <p className="text-[11px] text-ink-faint">
-                            Fuente: {MAP_STYLE_LABELS[mapStyle ?? 'topo']}. Descarga solo las zonas que vayas a necesitar.
+                            Fuente: {MAP_STYLE_LABELS[mapStyle ?? 'osm']}. Descarga solo las zonas que vayas a necesitar.
                         </p>
                     </div>
                 </div>

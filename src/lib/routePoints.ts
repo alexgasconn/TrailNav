@@ -65,7 +65,7 @@ function extractGpxWaypoints(route: { geoJson?: any }, profile: RouteProfile): R
 
         points.push({
             id: `gpx-${index}`,
-            kind: classifyWaypoint(name),
+            kind: ['water', 'summit', 'junction', 'aid', 'waypoint'].includes(feature.properties?.sym) ? feature.properties.sym : classifyWaypoint(name),
             name,
             coordinate: position,
             distance: Number(snapped.properties?.location ?? 0),
@@ -181,11 +181,11 @@ function extractTurns(profile: RouteProfile): RoutePoint[] {
     }));
 }
 
-const cache = new Map<string, { signature: number; points: RoutePoint[] }>();
+const cache = new Map<string, { signature: unknown; points: RoutePoint[] }>();
 
 export function getRoutePoints(route: { id: string; geoJson?: any }): RoutePoint[] {
     const profile = getRouteProfile(route);
-    const signature = profile.coordinates.length;
+    const signature = route.geoJson;
     const cached = cache.get(route.id);
     if (cached && cached.signature === signature) return cached.points;
 
@@ -216,6 +216,7 @@ export function getRoutePoints(route: { id: string; geoJson?: any }): RoutePoint
     const gpxWaypoints = extractGpxWaypoints(route, profile);
     points.push(...gpxWaypoints);
     points.push(...extractSummits(profile));
+    points.push(...extractTurns(profile));
 
     const result = points
         .filter((point) => Number.isFinite(point.distance))

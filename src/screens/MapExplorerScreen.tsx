@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as turf from '@turf/turf';
-import { Compass, CloudSun, Crosshair, Layers, Minus, Navigation2, Plus, Satellite, WifiOff, X } from 'lucide-react';
-import { MAP_STYLE_IDS, MapStyleId, Route, getSettings, saveSettings } from '../lib/db';
+import { Compass, CloudSun, Crosshair, Layers, MapPin, Minus, Navigation2, Plus, Satellite, WifiOff, X } from 'lucide-react';
+import { MAP_STYLE_IDS, MapStyleId, Route, getSettings, saveRoute, saveSettings } from '../lib/db';
 import { Screen } from '../App';
 import {
     MAP_STYLE_LABELS,
@@ -17,7 +17,8 @@ import {
 import { RouteWeatherSample, describeWeather, getRouteWeather, getStoredStart } from '../lib/routeWeather';
 import { estimateRouteTime } from '../lib/eta';
 import { formatTimeOfDay } from '../lib/format';
-import { getRouteProfile } from '../lib/routeProfile';
+import { getRouteProfile, indexAtDistance, sampleProfile } from '../lib/routeProfile';
+import ProfileChart from '../components/ProfileChart';
 import { getRoutePoints } from '../lib/routePoints';
 import { formatDistance, formatElevation } from '../lib/format';
 import { useNavigationSession } from '../state/navigationSession';
@@ -35,9 +36,18 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
     const initialCenterRef = useRef(false);
     const cameraRef = useRef<{ center: [number, number]; zoom: number; bearing: number } | null>(null);
     const placeMarkersRef = useRef<maplibregl.Marker[]>([]);
+    const profileMarkerRef = useRef<maplibregl.Marker | null>(null);
+    const [selectedDistance, setSelectedDistance] = useState<number | null>(null);
+    const [waypoint, setWaypoint] = useState<[number, number] | null>(null);
+    const [waypointName, setWaypointName] = useState('');
+    const [waypointNotes, setWaypointNotes] = useState('');
+    const [waypointKind, setWaypointKind] = useState('waypoint');
+    const [waypointError, setWaypointError] = useState<string | null>(null);
+    const [savingWaypoint, setSavingWaypoint] = useState(false);
+    const [tilted, setTilted] = useState(false);
 
     const [mapStyle, setMapStyle] = useState<MapStyleId | null>(null);
-    const [referenceOnly, setReferenceOnly] = useState(true);
+    const [referenceOnly, setReferenceOnly] = useState(false);
     const [following, setFollowing] = useState(true);
     const [courseUp, setCourseUp] = useState(false);
     const [online, setOnline] = useState(navigator.onLine);
@@ -132,6 +142,23 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
             trackResize: true,
         });
         mapRef.current = map;
+        const canvas = map.getCanvas();
+        let pressTimer: number | undefined;
+        let pressStart: [number, number] | null = null;
+        const cancelPress = () => { window.clearTimeout(pressTimer); pressStart = null; };
+        const press = (event: PointerEvent) => {
+            cancelPress();
+            if (!route || !event.isPrimary) return;
+            const bounds = canvas.getBoundingClientRect();
+            pressStart = [event.clientX, event.clientY];
+            const coordinate = map.unproject([event.clientX - bounds.left, event.clientY - bounds.top]);
+            pressTimer = window.setTimeout(() => { setWaypoint([coordinate.lng, coordinate.lat]); cancelPress(); }, 650);
+        };
+        const movePress = (event: PointerEvent) => { if (pressStart && Math.hypot(event.clientX - pressStart[0], event.clientY - pressStart[1]) > 10) cancelPress(); };
+        canvas.addEventListener('pointerdown', press);
+        canvas.addEventListener('pointermove', movePress);
+        canvas.addEventListener('pointerup', cancelPress);
+        canvas.addEventListener('pointercancel', cancelPress);
 
         map.on('error', (event) => console.error('MapLibre:', event.error));
         map.on('dragstart', () => {
@@ -153,10 +180,10 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                 new maplibregl.Marker({ element: createRoutePointMarker(point) })
                     .setLngLat(point.coordinate)
                     .setPopup(
-                        new maplibregl.Popup({ offset: 16, closeButton: false }).setHTML(
-                            `<strong>${point.name}</strong><br/>km ${(point.distance / 1000).toFixed(1)}` +
+                        new maplibregl.Popup({ offset: 16, closeButton: false }).setText(
+                            `${point.name} · km ${(point.distance / 1000).toFixed(1)}` +
                             (point.elevation != null ? ` · ${Math.round(point.elevation)} m` : '') +
-                            (point.detail ? `<br/>${point.detail}` : '')
+                            (point.detail ? ` · ${point.detail}` : '')
                         )
                     )
                     .addTo(map)
@@ -194,6 +221,13 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
         });
 
         return () => {
+            cancelPress();
+            canvas.removeEventListener('pointerdown', press);
+            canvas.removeEventListener('pointermove', movePress);
+            canvas.removeEventListener('pointerup', cancelPress);
+            canvas.removeEventListener('pointercancel', cancelPress);
+            profileMarkerRef.current?.remove();
+            profileMarkerRef.current = null;
             cameraRef.current = { center: map.getCenter().toArray() as [number, number], zoom: map.getZoom(), bearing: map.getBearing() };
             observer.disconnect();
             weatherMarkersRef.current.forEach((marker) => marker.remove());
@@ -207,7 +241,7 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
             mapRef.current = null;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [route?.id, mapStyle, referenceOnly, initAttempt]);
+    }, [route, mapStyle, referenceOnly, initAttempt]);
 
     useEffect(() => {
         if (!('geolocation' in navigator)) {
@@ -314,6 +348,39 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
     };
 
     const isNavigatingThisRoute = session.status !== 'idle' && session.route?.id === route?.id;
+    const selectProfileDistance = (distance: number) => {
+        setSelectedDistance(distance);
+        followRef.current = false;
+        setFollowing(false);
+        const map = mapRef.current;
+        if (!map || !profile) return;
+        const index = indexAtDistance(profile, distance);
+        const next = Math.min(index + 1, profile.coordinates.length - 1);
+        const span = profile.cumulativeDistance[next] - profile.cumulativeDistance[index];
+        const ratio = span > 0 ? (distance - profile.cumulativeDistance[index]) / span : 0;
+        const coordinate: [number, number] = [0, 1].map((axis) => profile.coordinates[index][axis] + (profile.coordinates[next][axis] - profile.coordinates[index][axis]) * ratio) as [number, number];
+        if (!profileMarkerRef.current) profileMarkerRef.current = new maplibregl.Marker({ color: '#111827' }).setLngLat(coordinate).addTo(map);
+        else profileMarkerRef.current.setLngLat(coordinate);
+        const pixel = map.project(coordinate);
+        if (pixel.x < 50 || pixel.x > map.getContainer().clientWidth - 50 || pixel.y < 100 || pixel.y > map.getContainer().clientHeight - 250) map.jumpTo({ center: coordinate });
+    };
+    const saveWaypoint = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!route || !waypoint || savingWaypoint) return;
+        setSavingWaypoint(true);
+        setWaypointError(null);
+        try {
+            const line = turf.lineString(profile!.coordinates);
+            if (turf.nearestPointOnLine(line, waypoint, { units: 'meters' }).properties.dist > 250) throw new Error('El punto debe estar a menos de 250 m de la ruta');
+            const updated = { ...route, geoJson: { ...route.geoJson, features: [...route.geoJson.features, turf.point(waypoint, { name: waypointName.trim() || 'Punto', desc: waypointNotes, sym: waypointKind })] } };
+            await saveRoute(updated);
+            setWaypoint(null);
+            setWaypointName('');
+            setWaypointNotes('');
+            onNavigate('map', updated);
+        } catch (cause) { setWaypointError(cause instanceof Error ? cause.message : 'No se pudo guardar el punto'); }
+        finally { setSavingWaypoint(false); }
+    };
 
     return (
         <div className="w-full h-full relative overflow-hidden bg-canvas">
@@ -398,7 +465,15 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                         <span>D− {formatElevation(profile.totalDescent)}</span>
                         <span>{routePoints.length} puntos</span>
                     </div>
-                    <div className="flex gap-2 mt-4">
+                    {profile.hasElevation && <div className="mt-2">
+                        <ProfileChart profile={profile} height={78} showPoints={false} showSegments={false} onDistanceSelect={selectProfileDistance} />
+                        {selectedDistance != null && <p className="text-xs tabular text-ink-soft">{formatDistance(selectedDistance)} · {formatElevation(sampleProfile(profile, selectedDistance)?.elevation ?? 0)}</p>}
+                    </div>}
+                    <div className="flex gap-2 mt-2">
+                        <button onClick={() => { const center = mapRef.current?.getCenter(); if (center) setWaypoint([center.lng, center.lat]); }} className="h-12 w-12 shrink-0 rounded-lg border border-line grid place-items-center" aria-label="Añadir waypoint en el centro del mapa" title="Añadir waypoint"><MapPin size={20} /></button>
+                        <button onClick={() => { setTilted(!tilted); mapRef.current?.easeTo({ pitch: tilted ? 0 : 55, duration: 500 }); }} className="h-12 w-12 shrink-0 rounded-lg border border-line grid place-items-center" aria-pressed={tilted} aria-label="Inclinar mapa" title="Inclinar mapa"><Layers size={20} /></button>
+                    </div>
+                    <div className="flex gap-2 mt-3">
                         <button onClick={() => onNavigate('free')} className="h-12 w-12 shrink-0 rounded-lg border border-line grid place-items-center" aria-label="Quitar ruta y navegar libremente" title="Quitar ruta y navegar libremente"><X size={20} /></button>
                         <button
                             onClick={() => onNavigate('analysis', route)}
@@ -429,6 +504,16 @@ export function MapExplorerScreen({ route, onNavigate }: { route: Route | null; 
                     <button onClick={recenter} className="mt-3 w-full h-12 rounded-lg bg-moss text-white font-semibold text-sm flex items-center justify-center gap-2"><Navigation2 size={18} />{following ? 'Centrar posición' : 'Seguir mi posición'}</button>
                 </div>
             )}
+            {waypoint && <div className="absolute inset-0 z-30 bg-ink/40 flex items-end justify-center p-3">
+                <form onSubmit={saveWaypoint} role="dialog" aria-modal="true" aria-labelledby="waypoint-title" className="w-full max-w-sm bg-surface rounded-lg p-4 space-y-3 max-h-[90%] overflow-y-auto">
+                    <div className="flex items-center justify-between"><h2 id="waypoint-title" className="font-semibold">Nuevo waypoint</h2><button type="button" onClick={() => setWaypoint(null)} aria-label="Cerrar waypoint" className="touch-target grid place-items-center"><X size={20} /></button></div>
+                    <label className="block text-sm">Nombre<input autoFocus maxLength={100} value={waypointName} onChange={(event) => setWaypointName(event.target.value)} className="block w-full min-h-12 border border-line rounded-lg px-3 bg-canvas" /></label>
+                    <label className="block text-sm">Tipo<select value={waypointKind} onChange={(event) => setWaypointKind(event.target.value)} className="block w-full min-h-12 border border-line rounded-lg px-3 bg-canvas"><option value="waypoint">Lugar / aparcamiento</option><option value="water">Fuente de agua</option><option value="summit">Cima</option><option value="junction">Cruce</option><option value="aid">Refugio</option></select></label>
+                    <label className="block text-sm">Notas<textarea maxLength={1000} value={waypointNotes} onChange={(event) => setWaypointNotes(event.target.value)} className="block w-full border border-line rounded-lg p-3 bg-canvas" /></label>
+                    {waypointError && <p role="alert" className="text-sm text-alert">{waypointError}</p>}
+                    <button disabled={savingWaypoint} className="w-full min-h-12 rounded-lg bg-moss text-white font-semibold disabled:opacity-50">{savingWaypoint ? 'Guardando...' : 'Guardar punto'}</button>
+                </form>
+            </div>}
         </div>
     );
 }

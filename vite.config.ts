@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
           navigateFallback: 'index.html'
         },
         workbox: {
+          importScripts: ['share-target.js'],
           globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2}'],
           navigateFallback: 'index.html',
           navigateFallbackDenylist: [/^\/api\//],

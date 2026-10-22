@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { RouteProfile } from '../lib/routeProfile';
 import { indexAtDistance } from '../lib/routeProfile';
 import type { RoutePoint } from '../lib/routePoints';
@@ -19,6 +19,7 @@ type Props = {
     analysis?: RouteAnalysis | null;
     /** Etiquetas de km en el eje horizontal. */
     showDistanceAxis?: boolean;
+    onDistanceSelect?: (distance: number) => void;
 };
 
 const GRADE_STOPS: [number, [number, number, number]][] = [
@@ -91,8 +92,20 @@ export function ProfileChart({
     points,
     analysis,
     showDistanceAxis = true,
+    onDistanceSelect,
 }: Props) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const [selectedDistance, setSelectedDistance] = useState<number | null>(null);
+    const markerDistance = selectedDistance ?? currentDistance;
+    const selectDistance = (distance: number) => {
+        const clamped = Math.max(0, Math.min(distance, profile.totalDistance));
+        setSelectedDistance(clamped);
+        onDistanceSelect?.(clamped);
+    };
+    const selectPointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (bounds.width > 0) selectDistance((event.clientX - bounds.left) / bounds.width * profile.totalDistance);
+    };
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -214,8 +227,8 @@ export function ProfileChart({
         }
 
         // draw current position marker if provided
-        if (currentDistance != null) {
-            const clamped = Math.max(0, Math.min(currentDistance, profile.totalDistance));
+        if (markerDistance != null) {
+            const clamped = Math.max(0, Math.min(markerDistance, profile.totalDistance));
             const xi = toX(clamped);
             ctx.beginPath();
             ctx.moveTo(xi, padding);
@@ -286,9 +299,22 @@ export function ProfileChart({
                 ctx.fillText(km === 0 ? `${label} km` : label, x, h + 4);
             }
         }
-    }, [profile, height, currentDistance, moderateThreshold, steepThreshold, showColoredFill, showPoints, showSegments, points, analysis, showDistanceAxis]);
+    }, [profile, height, markerDistance, moderateThreshold, steepThreshold, showColoredFill, showPoints, showSegments, points, analysis, showDistanceAxis]);
 
-    return <canvas ref={canvasRef} className="w-full block" style={{ height: `${height}px` }} />;
+    return <canvas ref={canvasRef} className="w-full block" style={{ height: `${height}px`, touchAction: onDistanceSelect ? 'none' : 'auto' }}
+        role={onDistanceSelect ? 'slider' : 'img'} tabIndex={onDistanceSelect ? 0 : undefined}
+        aria-label="Perfil de elevación" aria-valuemin={onDistanceSelect ? 0 : undefined}
+        aria-valuemax={onDistanceSelect ? Math.round(profile.totalDistance) : undefined}
+        aria-valuenow={onDistanceSelect ? Math.round(markerDistance ?? 0) : undefined}
+        aria-valuetext={onDistanceSelect ? `${((markerDistance ?? 0) / 1000).toFixed(2)} km` : undefined}
+        onPointerDown={onDistanceSelect ? (event) => { event.currentTarget.setPointerCapture(event.pointerId); selectPointer(event); } : undefined}
+        onPointerMove={onDistanceSelect ? (event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) selectPointer(event); } : undefined}
+        onKeyDown={onDistanceSelect ? (event) => {
+            if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+                event.preventDefault();
+                selectDistance(event.key === 'Home' ? 0 : event.key === 'End' ? profile.totalDistance : (markerDistance ?? 0) + (event.key === 'ArrowRight' ? 1 : -1) * profile.totalDistance / 100);
+            }
+        } : undefined} />;
 }
 
 export default ProfileChart;

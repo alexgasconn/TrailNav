@@ -86,6 +86,13 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (s: Screen) => void
                         checked={settings.vibrationAlerts}
                         onChange={(value) => update({ vibrationAlerts: value })}
                     />
+                    <Toggle label="Avisos sonoros" description="Desvíos y proximidad a puntos" checked={settings.soundAlerts} onChange={(soundAlerts) => update({ soundAlerts })} />
+                    <Toggle label="Avisos por voz" description="Incluye giros orientativos derivados del track, no de cruces cartográficos" checked={settings.voiceAlerts} onChange={(voiceAlerts) => update({ voiceAlerts })} />
+                    <Toggle label="Proximidad a waypoints" description="Avisar al acercarse a un punto de la ruta" checked={settings.waypointAlerts} onChange={(waypointAlerts) => update({ waypointAlerts })} />
+                    <label className="block text-sm">Distancia de aviso · {settings.waypointRadius} m<input type="range" min="30" max="250" step="10" value={settings.waypointRadius} onChange={(event) => update({ waypointRadius: Number(event.target.value) })} className="w-full h-10" /></label>
+                    <Toggle label="Auto-pausa" description="Tras 15 segundos detenido; el GPS sigue activo para reanudar" checked={settings.autoPause} onChange={(autoPause) => update({ autoPause })} />
+                    <label className="block text-sm">Umbral de auto-pausa · {settings.autoPauseSpeed} km/h<input type="range" min="0.5" max="3" step="0.5" value={settings.autoPauseSpeed} onChange={(event) => update({ autoPauseSpeed: Number(event.target.value) })} className="w-full h-10" /></label>
+                    <Toggle label="Auto-zoom" description="Más detalle caminando y más perspectiva a velocidad alta" checked={settings.autoZoom} onChange={(autoZoom) => update({ autoZoom })} />
                 </Group>
 
                 <Group icon={<Gauge size={18} />} title="Tu perfil de marcha">
@@ -122,6 +129,8 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (s: Screen) => void
                 </Group>
 
                 <Group icon={<Smartphone size={18} />} title="Dispositivo">
+                    <Toggle label="Ahorro de batería" description="Permite posiciones menos recientes y reduce la precisión solicitada al GPS" checked={settings.batterySaver} onChange={(batterySaver) => update({ batterySaver })} />
+                    <Toggle label="Modo luz solar" description="Mayor contraste en paneles y cartografía" checked={settings.sunlightMode} onChange={(sunlightMode) => update({ sunlightMode })} />
                     <Toggle
                         label="Pantalla siempre encendida"
                         description="Solo mientras hay una navegación activa"

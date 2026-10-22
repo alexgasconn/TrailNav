@@ -59,6 +59,15 @@ export interface Settings {
   mapStyleDefaultVersion?: number;
   screenAlwaysOn: boolean;
   vibrationAlerts: boolean;
+  soundAlerts: boolean;
+  voiceAlerts: boolean;
+  waypointAlerts: boolean;
+  waypointRadius: number;
+  autoPause: boolean;
+  autoPauseSpeed: number;
+  batterySaver: boolean;
+  autoZoom: boolean;
+  sunlightMode: boolean;
   /** Perfil para estimar tiempos de ruta. */
   fitness: FitnessLevel;
   pace: PaceType;
@@ -74,6 +83,15 @@ export const DEFAULT_SETTINGS: Settings = {
   mapStyleDefaultVersion: 1,
   screenAlwaysOn: true,
   vibrationAlerts: true,
+  soundAlerts: false,
+  voiceAlerts: false,
+  waypointAlerts: true,
+  waypointRadius: 100,
+  autoPause: false,
+  autoPauseSpeed: 1,
+  batterySaver: false,
+  autoZoom: false,
+  sunlightMode: false,
   fitness: 'average',
   pace: 'steady',
   packWeight: 'light',

@@ -26,10 +26,24 @@ export default function App() {
 
 function Shell() {
   const session = useNavigationSession();
-  const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+  const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('shared') || params.get('action') === 'import' ? 'import' : params.get('action') === 'map' ? 'free' : 'home';
+  });
+  const [launchFile, setLaunchFile] = useState<File | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [pendingRoute, setPendingRoute] = useState<Route | null>(null);
   const historyRef = useRef<Screen[]>([]);
+  useEffect(() => {
+    const queue = (window as Window & { launchQueue?: { setConsumer: (callback: (params: { files: { getFile: () => Promise<File> }[] }) => void) => void } }).launchQueue;
+    queue?.setConsumer(async (params) => {
+      try {
+        if (!params.files?.[0]) return;
+        setLaunchFile(await params.files[0].getFile());
+        setCurrentScreen('import');
+      } catch { setCurrentScreen('import'); }
+    });
+  }, []);
 
   useEffect(() => {
     registerTileProtocol();
@@ -99,7 +113,7 @@ function Shell() {
     <div className="flex flex-col h-full bg-canvas text-ink font-sans overflow-hidden">
       <main className={`flex-1 relative min-h-0 ${isFullScreenMap ? 'overflow-hidden' : 'overflow-y-auto scrollable'}`}>
         {currentScreen === 'home' && <HomeScreen onNavigate={navigate} />}
-        {currentScreen === 'import' && <RouteImportScreen onNavigate={navigate} />}
+        {currentScreen === 'import' && <RouteImportScreen onNavigate={navigate} initialFile={launchFile} onFileConsumed={() => setLaunchFile(null)} />}
         {currentScreen === 'analysis' && selectedRoute && <RouteAnalysisScreen route={selectedRoute} onNavigate={navigate} />}
         {currentScreen === 'map' && <MapExplorerScreen route={selectedRoute} onNavigate={navigate} />}
         {currentScreen === 'free' && <MapExplorerScreen route={null} onNavigate={navigate} />}
